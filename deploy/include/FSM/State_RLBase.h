@@ -6,6 +6,8 @@
 #include "FSMState.h"
 #include "isaaclab/envs/mdp/actions/joint_actions.h"
 #include "isaaclab/envs/mdp/terminations.h"
+#include "DataLogger.h"
+#include <chrono>
 
 class State_RLBase : public FSMState
 {
@@ -58,6 +60,11 @@ public:
 
 private:
     std::unique_ptr<isaaclab::ManagerBasedRLEnv> env;
+    std::unique_ptr<DataLogger> logger;
+    bool enable_logging = false;
+    std::chrono::duration<double> logging_dt{0.02};
+    std::chrono::steady_clock::time_point last_log_time;
+    std::chrono::steady_clock::time_point start_time;
 
     std::thread policy_thread;
     bool policy_thread_running = false;

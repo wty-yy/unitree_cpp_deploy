@@ -13,4 +13,6 @@ FSM:
     ]
   Velocity:
     policy_dir: ../../../logs/rsl_rl/kaiwu/v6-2_124004
+    logging: true
+    logging_dt: 0.01
     

@@ -23,7 +23,10 @@ unitree_rl_lab/
 - **yaml-cpp**: 用于读取配置文件。
 - **Eigen3**: 矩阵运算库。
 - **fmt**: 格式化输出库。
-- **onnxruntime**: 下载[onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2)解压到`deploy/thirdparty/onnxruntime-linux-aarch64-gpu-1.16.0/`文件夹中
+- **onnxruntime**:
+   - Orin NX: 需下载[onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2)解压到`deploy/thirdparty/`文件夹中
+   - x64 Linux: 需下载[onnxruntime-linux-x64-1.23.2.tgz](https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz)解压到`deploy/thirdparty/`文件夹中
+   - 修改[{ROBOT}/CMakeLists.txt](deploy/robots/go2/CMakeLists.txt)中的onnx链接路径(解开相应注释)
 
 *注意：本项目 `deploy/thirdparty` 目录下已包含适用于 Linux AArch64 (GPU) 的 `onnxruntime` (v1.16.0) 库，无需额外安装。*
 

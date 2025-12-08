@@ -4,6 +4,7 @@
 
 using LowCmd_t = unitree::robot::go2::publisher::LowCmd;
 using LowState_t = unitree::robot::go2::subscription::LowState;
+using SportModeState_t = unitree::robot::go2::subscription::SportModeState;
 
 enum FSMMode
 {

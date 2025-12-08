@@ -11,6 +11,8 @@
 #include "isaaclab/assets/articulation/articulation.h"
 #include "isaaclab/algorithms/algorithms.h"
 #include <iostream>
+#include <map>
+#include <string>
 
 namespace isaaclab
 {
@@ -67,7 +69,16 @@ public:
             robot->data.motion_loader->update(episode_length * step_dt);
         }
         auto obs = observation_manager->compute();
-        auto action = alg->act(obs);
+        
+        last_inference_results = alg->forward(obs);
+        
+        std::vector<float> action;
+        if (last_inference_results.count("actions")) {
+            action = last_inference_results["actions"];
+        } else if (!last_inference_results.empty()) {
+            action = last_inference_results.begin()->second;
+        }
+        
         action_manager->process_action(action);
     }
 
@@ -81,6 +92,8 @@ public:
     std::unique_ptr<Algorithms> alg;
     long episode_length = 0;
     float global_phase = 0.0f;
+    
+    std::map<std::string, std::vector<float>> last_inference_results;
 };
 
 };
