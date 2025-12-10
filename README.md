@@ -74,7 +74,12 @@ sudo ./go2_ctrl [选项]
 
 指定使用 `eth0` 网卡运行：
 ```bash
-sudo ./go2_ctrl -n eth0
+./go2_ctrl -n eth0
+```
+
+使用仿真`lo`运行仿真，需安装[untiree_mujoco](https://github.com/unitreerobotics/unitree_mujoco)，并配置`simulate/config.yaml`中`domain_id: 0`：
+```bash
+./go2_ctrl -n lo
 ```
 
 ### 操作流程
