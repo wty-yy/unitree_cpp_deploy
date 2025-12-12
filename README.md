@@ -55,47 +55,52 @@ unitree_rl_lab/
 
 ### 基本用法
 
-将go2启动，进入站立状态后让机械狗趴下，使用app连接上后，依次点击：设置-服务状态，关闭`mcf/*`服务，打开`ota_box`服务，关闭官方控制程序，避免控制冲突。
-
-```bash
-sudo ./go2_ctrl [选项]
-```
-
-*建议使用 `sudo` 运行以确保有足够的权限访问网络接口和系统资源。*
-
-### 命令行参数
+#### 命令行参数
 
 - `-h, --help`: 显示帮助信息。
 - `-v, --version`: 显示版本信息。
 - `--log`: 开启日志记录 (日志将保存在 `deploy/robots/go2/log/` 目录下)。
 - `-n, --network <interface>`: 指定用于 DDS 通信的网络接口名称 (例如 `eth0`, `wlan0`)。如果不指定，将使用默认接口。
 
+#### 真机启动
+将go2启动，进入站立状态后让机械狗趴下，使用app连接上后，依次点击：设置-服务状态，关闭`mcf/*`服务，打开`ota_box`服务，关闭官方控制程序，避免控制冲突。
+
+```bash
+sudo ./go2_ctrl [选项]
+```
+
 **示例：**
 
-指定使用 `eth0` 网卡运行：
+在NX上启动, 下位机网卡一般为 `eth0`
 ```bash
 ./go2_ctrl -n eth0
 ```
 
-使用仿真`lo`运行仿真，需安装[untiree_mujoco](https://github.com/unitreerobotics/unitree_mujoco)，并配置`simulate/config.yaml`中`domain_id: 0`：
+#### 仿真启动
+
+使用xbox数据协议的手柄即可控制机器人, 如需其他协议, 参考unitree_mujoco修改手柄配置文件
+
+下载并编译[unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco)中的`simulate/`内容，并配置`simulate/config.yaml`中`domain_id: 0`, `use_joystick: 1`
 ```bash
-./go2_ctrl -n lo
+./simulate/build/unitree_mujoco  # 启动仿真
+./go2_ctrl -n lo  # 启动控制
 ```
 
 ### 操作流程
 
-1. 启动程序后，控制台将显示 "Waiting for connection to robot..."。
-2. 确保机器人上电并连接正常，程序连接成功后会显示 "Connected to robot."。
-3. **进入站立模式**：按下手柄上的 **[L2 + A]** 组合键，机器人将进入 `FixStand` 模式并站立。
-4. **开始 RL 控制**：按下手柄上的 **[Start]** 键，机器人将切换到 `Velocity` 模式，开始执行加载的 RL 策略。
+1. 启动程序后，控制台将显示 "Waiting for connection to robot..."
+2. 确保机器人上电并连接正常，程序连接成功后会显示 "Connected to robot."
+3. **进入站立模式**：按下手柄上的 **[L2 + A]** 组合键，机器人将进入 `FixStand` 模式并站立
+4. **开始 RL 控制**：按下手柄上的 **[Start]** 键，机器人将切换到 `Velocity` 模式，开始执行加载的 RL 策略
 
 ## 配置说明
 
-配置文件位于 `deploy/robots/go2/config/config.yaml`。
+配置文件位于 [deploy/robots/go2/config/config.yaml](./deploy/robots/go2/config/config.yaml), 包含功能：
+1. 实时记录运行时数据, 配置`Velocity/logging: true`, 设置记录频率 `logging_dt`, 默认100Hz, 存储位置在模型文件夹下, 例如[./logs/rsl_rl/v6-2_124004/logs/](./logs/rsl_rl/v6-2_124004/logs/)
 
 ### 更换策略模型
 
-要更换使用的 RL 策略，请修改 `config.yaml` 中的 `Velocity.policy_dir` 字段。
+要更换使用的 RL 策略，请修改 `config.yaml` 中的 `Velocity.policy_dir` 字段
 
 ```yaml
 Velocity:
