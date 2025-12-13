@@ -197,6 +197,40 @@ def compute_contact_status(df: pd.DataFrame, force_threshold: float = 5.0) -> Op
 
     return contact_data, contact_force
 
+def draw_phase_blocks(ax, y_pos_text=0.95, draw_text=False):
+    """
+    在给定的 ax 上绘制背景色块和文字说明
+    """
+    # 定义阶段：(开始时间, 结束时间, 标签文本, 颜色索引)
+    # 颜色索引基于 plt.cm.tab10: 0=蓝, 1=橙, 2=绿, 3=红, 4=紫, 5=棕 ...
+    phases = [
+        (0.0, 2.0, "Steady-state\nGait", 2, 0.7),      # 绿色 (稳定)
+        (2.0, 2.3, "Support\nLoss", 1, 0.08),           # 橙色 (警示/踏空)
+        (2.3, 3.0, "Rapid\nAdaptation", 0, 0.1),       # 蓝色 (策略调整)
+        (3.0, 4.0, "Impact\nAbsorption", 3, 0.28),      # 红色 (冲击)
+        (4.0, 6.0, "Resumed\nGait", 2, 0.25)            # 绿色 (恢复稳定，与第一阶段同色)
+    ]
+
+    colors = plt.cm.tab10.colors # 获取 tab10 的颜色列表
+
+    for start, end, label, color_idx, x_bias in phases:
+        # 1. 绘制背景色块 (alpha 设置透明度)
+        color = colors[color_idx % len(colors)]
+        ax.axvspan(start, end, color=color, alpha=0.15, lw=0) # lw=0 去掉边框
+
+        # 2. 绘制文字 (居中显示)
+        # 计算色块中间位置
+        mid_x = start + (end - start) / 2 + x_bias
+        
+        # 使用 transform=ax.get_xaxis_transform() 让 y 坐标处于 0-1 的相对坐标系中
+        # 这样文字总是在图的顶部，不会因为数据范围变化而跑掉
+        if draw_text:
+            ax.text(mid_x, y_pos_text, label, 
+                    transform=ax.get_xaxis_transform(),
+                    ha='center', va='top', 
+                    fontsize=11, fontweight='bold', 
+                    color=tuple([c * 0.6 for c in color]), # 让文字颜色比背景深一点，便于阅读
+                    zorder=10) # 保证文字在最上层
 
 def plot(times: List[str], 
                  heights: Dict[str, List[float]], 
@@ -238,6 +272,7 @@ def plot(times: List[str],
     if contact_force:
         ax = axs[ax_idx]
         ax_idx += 1
+        draw_phase_blocks(ax, y_pos_text=0.95, draw_text=True)
         ax.plot([xs[0], xs[-1]], [force_threshold, force_threshold], 'k--', label='Contact Threshold', alpha=0.7)
         for i, name in enumerate(foot_names):
             if name in ALL_FOOT_NAMES:
@@ -285,6 +320,7 @@ def plot(times: List[str],
     #     ax.legend(loc='upper right', bbox_to_anchor=(1, 1), fontsize='small', framealpha=0.9)
 
     # --- Plot: Heights ---
+    draw_phase_blocks(axs[ax_idx])
     for name, data in heights.items():
         ax = axs[ax_idx]
         ax.plot(xs, data, label=name, linewidth=2, color=foot_colors[name])
