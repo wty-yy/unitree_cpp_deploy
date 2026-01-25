@@ -12,7 +12,13 @@ FSM:
       [0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5],
     ]
   Velocity:
-    policy_dir: ../../../logs/rsl_rl/kaiwu/v6-2_124004
-    logging: true
+    policy_dir: ../../../logs/rsl_rl/go2_moe_cts_expert_goal_137000_0.6745
+    # policy_dir: ../../../logs/rsl_rl/go2_rem_cts_fast_flat_v4_fz_82k
+    logging: false
     logging_dt: 0.01
-    
+    fixed_command:
+      enabled: true
+      lin_vel_x: 1.0
+      lin_vel_y: 0.0
+      ang_vel_z: 0.0
+      duration: 3.0  # seconds, set to null for indefinite duration

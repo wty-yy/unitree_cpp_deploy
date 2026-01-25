@@ -45,10 +45,56 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
         start_time = std::chrono::steady_clock::now();
         last_log_time = start_time - std::chrono::duration_cast<std::chrono::steady_clock::duration>(logging_dt);
     }
+
+    // Initialize fixed command settings
+    if (cfg["fixed_command"] && cfg["fixed_command"]["enabled"]) {
+        env->fixed_command_enabled = cfg["fixed_command"]["enabled"].as<bool>();
+        if (env->fixed_command_enabled) {
+            env->fixed_lin_vel_x = cfg["fixed_command"]["lin_vel_x"].as<float>();
+            env->fixed_lin_vel_y = cfg["fixed_command"]["lin_vel_y"].as<float>();
+            env->fixed_ang_vel_z = cfg["fixed_command"]["ang_vel_z"].as<float>();
+            if (cfg["fixed_command"]["duration"]) {
+                env->fixed_command_duration = cfg["fixed_command"]["duration"].as<float>();
+            }
+            spdlog::info("Fixed command enabled: lin_vel_x={:.2f}, lin_vel_y={:.2f}, ang_vel_z={:.2f}, duration={:.1f}s",
+                env->fixed_lin_vel_x, env->fixed_lin_vel_y, env->fixed_ang_vel_z, env->fixed_command_duration);
+            spdlog::info("Press [L2 + Y] to toggle fixed command execution");
+        }
+    }
 }
 
 void State_RLBase::run()
 {
+    // Check for L2 + Y to toggle fixed command execution
+    if (env->fixed_command_enabled) {
+        auto & joy = lowstate->joystick;
+        if (joy.LT.pressed && joy.Y.on_pressed) {
+            env->fixed_command_active = !env->fixed_command_active;
+            if (env->fixed_command_active) {
+                env->fixed_command_start_time = std::chrono::steady_clock::now();
+                if (env->fixed_command_duration > 0) {
+                    spdlog::info("Fixed command ACTIVATED for {:.1f}s: lin_vel_x={:.2f}, lin_vel_y={:.2f}, ang_vel_z={:.2f}",
+                        env->fixed_command_duration, env->fixed_lin_vel_x, env->fixed_lin_vel_y, env->fixed_ang_vel_z);
+                } else {
+                    spdlog::info("Fixed command ACTIVATED (indefinite): lin_vel_x={:.2f}, lin_vel_y={:.2f}, ang_vel_z={:.2f}",
+                        env->fixed_lin_vel_x, env->fixed_lin_vel_y, env->fixed_ang_vel_z);
+                }
+            } else {
+                spdlog::info("Fixed command DEACTIVATED, returning to joystick control");
+            }
+        }
+
+        // Check duration timeout
+        if (env->fixed_command_active && env->fixed_command_duration > 0) {
+            auto elapsed = std::chrono::steady_clock::now() - env->fixed_command_start_time;
+            float elapsed_sec = std::chrono::duration<float>(elapsed).count();
+            if (elapsed_sec >= env->fixed_command_duration) {
+                env->fixed_command_active = false;
+                spdlog::info("Fixed command COMPLETED after {:.1f}s, returning to joystick control", elapsed_sec);
+            }
+        }
+    }
+
     auto action = env->action_manager->processed_actions();
     for(int i(0); i < env->robot->data.joint_ids_map.size(); i++) {
         lowcmd->msg_.motor_cmd()[env->robot->data.joint_ids_map[i]].q() = action[i];

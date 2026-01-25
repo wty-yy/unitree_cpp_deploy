@@ -94,8 +94,16 @@ REGISTER_OBSERVATION(last_action)
 REGISTER_OBSERVATION(velocity_commands)
 {
     std::vector<float> obs(3);
-    auto & joystick = env->robot->data.joystick;
 
+    // Check if fixed command mode is active
+    if (env->fixed_command_enabled && env->fixed_command_active) {
+        obs[0] = env->fixed_lin_vel_x;
+        obs[1] = env->fixed_lin_vel_y;
+        obs[2] = env->fixed_ang_vel_z;
+        return obs;
+    }
+
+    auto & joystick = env->robot->data.joystick;
     auto cfg = env->cfg["commands"]["base_velocity"]["ranges"];
 
     obs[0] = joystick->ly();

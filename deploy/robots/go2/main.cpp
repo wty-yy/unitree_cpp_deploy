@@ -59,6 +59,7 @@ int main(int argc, char** argv)
 
     std::cout << "Press [L2 + A] to enter FixStand mode.\n";
     std::cout << "And then press [Start] to start controlling the robot.\n";
+    std::cout << "Press [L2 + Y] to toggle fixed command execution (if enabled in config).\n";
 
     while (true)
     {

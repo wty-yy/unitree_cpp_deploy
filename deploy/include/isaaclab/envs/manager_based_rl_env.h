@@ -94,6 +94,15 @@ public:
     float global_phase = 0.0f;
     
     std::map<std::string, std::vector<float>> last_inference_results;
+
+    // Fixed command control
+    bool fixed_command_enabled = false;
+    bool fixed_command_active = false;
+    float fixed_lin_vel_x = 0.0f;
+    float fixed_lin_vel_y = 0.0f;
+    float fixed_ang_vel_z = 0.0f;
+    float fixed_command_duration = 0.0f;  // 0 means indefinite
+    std::chrono::steady_clock::time_point fixed_command_start_time;
 };
 
 };
