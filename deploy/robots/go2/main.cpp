@@ -59,47 +59,60 @@ int main(int argc, char** argv)
         return true;
     };
 
-    // Start + Up -> Velocity_Up
-    fsm->states.back()->registered_checks.emplace_back(
-        std::make_pair(
-            [&, check_policy_valid]()->bool{
-                return joy.start.on_pressed && joy.up.pressed && check_policy_valid("policy_dir_up"); 
-            }, 
-            FSMMode::Velocity_Up
-        )
-    );
-    // Start + Down -> Velocity_Down
-    fsm->states.back()->registered_checks.emplace_back(
-        std::make_pair(
-            [&, check_policy_valid]()->bool{
-                return joy.start.on_pressed && joy.down.pressed && check_policy_valid("policy_dir_down"); 
-            }, 
-            FSMMode::Velocity_Down
-        )
-    );
-    // Start + Left -> Velocity_Left
-    fsm->states.back()->registered_checks.emplace_back(
-        std::make_pair(
-            [&, check_policy_valid]()->bool{ 
-                return joy.start.on_pressed && joy.left.pressed && check_policy_valid("policy_dir_left"); 
-            }, 
-            FSMMode::Velocity_Left
-        )
-    );
-    // Start + Right -> Velocity_Right
-    fsm->states.back()->registered_checks.emplace_back(
-        std::make_pair(
-            [&, check_policy_valid]()->bool{ 
-                return joy.start.on_pressed && joy.right.pressed && check_policy_valid("policy_dir_right"); 
-            }, 
-            FSMMode::Velocity_Right
-        )
-    );
+// Helper lambda to register velocity transitions
+    auto register_velocity_transitions = [&](BaseState* state) {
+        // Start + Up -> Velocity_Up
+        state->registered_checks.emplace_back(
+            std::make_pair(
+                [&, check_policy_valid]()->bool{ 
+                    return joy.start.on_pressed && joy.up.pressed && check_policy_valid("policy_dir_up"); 
+                }, 
+                FSMMode::Velocity_Up
+            )
+        );
+        // Start + Down -> Velocity_Down
+        state->registered_checks.emplace_back(
+            std::make_pair(
+                [&, check_policy_valid]()->bool{ 
+                    return joy.start.on_pressed && joy.down.pressed && check_policy_valid("policy_dir_down"); 
+                }, 
+                FSMMode::Velocity_Down
+            )
+        );
+        // Start + Left -> Velocity_Left
+        state->registered_checks.emplace_back(
+            std::make_pair(
+                [&, check_policy_valid]()->bool{ 
+                    return joy.start.on_pressed && joy.left.pressed && check_policy_valid("policy_dir_left"); 
+                }, 
+                FSMMode::Velocity_Left
+            )
+        );
+        // Start + Right -> Velocity_Right
+        state->registered_checks.emplace_back(
+            std::make_pair(
+                [&, check_policy_valid]()->bool{ 
+                    return joy.start.on_pressed && joy.right.pressed && check_policy_valid("policy_dir_right"); 
+                }, 
+                FSMMode::Velocity_Right
+            )
+        );
+    };
 
-    fsm->add(new State_RLBase(FSMMode::Velocity_Up, "Velocity_Up", "policy_dir_up", "Velocity"));
-    fsm->add(new State_RLBase(FSMMode::Velocity_Down, "Velocity_Down", "policy_dir_down", "Velocity"));
-    fsm->add(new State_RLBase(FSMMode::Velocity_Left, "Velocity_Left", "policy_dir_left", "Velocity"));
-    fsm->add(new State_RLBase(FSMMode::Velocity_Right, "Velocity_Right", "policy_dir_right", "Velocity"));
+    // Register transitions for FixStand
+    register_velocity_transitions(fsm->states.back());
+
+    // Add RL states and register transitions for them as well
+    std::vector<State_RLBase*> rl_states;
+    rl_states.push_back(new State_RLBase(FSMMode::Velocity_Up, "Velocity_Up", "policy_dir_up", "Velocity"));
+    rl_states.push_back(new State_RLBase(FSMMode::Velocity_Down, "Velocity_Down", "policy_dir_down", "Velocity"));
+    rl_states.push_back(new State_RLBase(FSMMode::Velocity_Left, "Velocity_Left", "policy_dir_left", "Velocity"));
+    rl_states.push_back(new State_RLBase(FSMMode::Velocity_Right, "Velocity_Right", "policy_dir_right", "Velocity"));
+
+    for(auto state : rl_states) {
+        register_velocity_transitions(state);
+        fsm->add(state);
+    }
 
     std::cout << "Press [L2 + A] to enter FixStand mode.\n";
     std::cout << "Then press [Start + Up/Down/Left/Right] to select and start a policy.\n";

@@ -9,6 +9,7 @@
     - Velocity_Down: 通过按键组合`Start + Down`切换到该模型, 使用`policy_dir_down`中的模型文件
     - Velocity_Left: 通过按键组合`Start + Left`切换到该模型, 使用`policy_dir_left`中的模型文件
     - Velocity_Right: 通过按键组合`Start + Right`切换到该模型, 使用`policy_dir_right`中的模型文件
+3. 进入模型方法: L2 + A站立, start + 方向键选择模型, 随时可start + 方向键切换模型, L2 + B进入阻尼模式
 ## 20251208 v0.1
 1. 新增运行时数据记录功能:
     - 在[config.yaml](deploy/robots/go2/config/config.yaml)的`logging`打开该功能, 及记录频率`logging_dt`

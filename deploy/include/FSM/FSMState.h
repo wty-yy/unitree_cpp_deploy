@@ -13,7 +13,7 @@ public:
     {
         // register for all states
         registered_checks.emplace_back(
-            std::make_pair(
+            std::make_pair(  // L2 + B to Passive
                 []()->bool{ return lowstate->joystick.LT.pressed && lowstate->joystick.B.on_pressed; },
                 (int)FSMMode::Passive
             )

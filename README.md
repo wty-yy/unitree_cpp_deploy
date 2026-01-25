@@ -91,12 +91,17 @@ sudo ./go2_ctrl [选项]
 1. 启动程序后，控制台将显示 "Waiting for connection to robot..."
 2. 确保机器人上电并连接正常，程序连接成功后会显示 "Connected to robot."
 3. **进入站立模式**：按下手柄上的 **[L2 + A]** 组合键，机器人将进入 `FixStand` 模式并站立
-4. **开始 RL 控制**：按下手柄上的 **[Start]** 键，机器人将切换到 `Velocity` 模式，开始执行加载的 RL 策略
+4. **开始 RL 控制**：按下手柄上的 **[Start + Up/Down/Left/Right]** 键，机器人将切换到相应的 `policy_dir_[up,down,left,right]` 控制模型，开始执行加载的 RL 策略
+5. **模型切换**：在运行过程中，可以随时通过按下 **[Start + 方向键]** 切换到不同的 RL 模型
+6. **固定指令执行**：按下手柄上的 **[L2 + Y]** 组合键，机器人将开始执行预设的固定指令（如配置文件中所设），再次按下该组合键将停止固定指令执行
+7. **进入阻尼模式**：按下手柄上的 **[L2 + B]** 组合键，机器人将进入阻尼模式，停止 RL 控制
 
 ## 配置说明
 
 配置文件位于 [deploy/robots/go2/config/config.yaml](./deploy/robots/go2/config/config.yaml), 包含功能：
 1. 实时记录运行时数据, 配置`Velocity/logging: true`, 设置记录频率 `logging_dt`, 默认100Hz, 存储位置在模型文件夹下, 例如[./logs/rsl_rl/v6-2_124004/logs/](./logs/rsl_rl/v6-2_124004/logs/)
+2. 固定指令执行功能, 配置`Velocity/fixed_command/enabled: true`, 设置固定指令值`command`, 以及持续时间`duration`(可选), 按`L2 + Y`启动/停止固定指令执行
+3. 多模型选择功能, 配置`Velocity/policy_dir_up/down/left/right`, 分别指定四个模型的路径, 按`Start + 方向键`切换模型
 
 ### 更换策略模型
 
@@ -105,12 +110,15 @@ sudo ./go2_ctrl [选项]
 ```yaml
 Velocity:
   # 策略模型路径 (相对于项目根目录或绝对路径)
-  policy_dir: ../../../logs/rsl_rl/kaiwu/v6-2_124004
+  policy_dir_up: ../../../logs/rsl_rl/go2_moe_cts_expert_goal_137000_0.6745  # best model
+  policy_dir_down: ../../../logs/rsl_rl/go2_moe_cts_fast_flat_v4_fz_54k  # fast model
+  policy_dir_left: ../../../logs/rsl_rl/kaiwu2025_v6-2_124004  # not bad model
+  policy_dir_right: null
 ```
 
 指定的目录结构应包含：
 - `exported/policy.onnx`: 导出的 ONNX 策略模型。
-- `params/deploy.yaml`: (可选) 相关的部署参数。
+- `params/deploy.yaml`: 对应的部署参数。
 
 ### 修改控制参数
 
