@@ -1,3 +1,5 @@
 build
 onnxruntime-linux-*
 logs/
+images
+__pycache__/
