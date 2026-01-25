@@ -12,10 +12,15 @@
 class State_RLBase : public FSMState
 {
 public:
-    State_RLBase(int state_mode, std::string state_string);
+    State_RLBase(int state_mode, std::string state_string, std::string policy_key = "policy_dir", std::string config_name = "");
     
     void enter()
     {
+        if (!env) {
+            spdlog::warn("State_RLBase::enter: Environment is null. Skipping initialization.");
+            return;
+        }
+
         // set gain
         for (int i = 0; i < env->robot->data.joint_stiffness.size(); ++i)
         {

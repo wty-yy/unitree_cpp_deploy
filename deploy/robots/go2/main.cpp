@@ -49,16 +49,60 @@ int main(int argc, char** argv)
         )
     );
     fsm->add(new State_FixStand(FSMMode::FixStand));
+
+    // Helper lambda to check if a policy is configured (not null)
+    auto check_policy_valid = [](std::string policy_key) -> bool {
+        auto cfg = param::config["FSM"]["Velocity"];
+        if (!cfg[policy_key] || cfg[policy_key].IsNull()) {
+            return false;
+        }
+        return true;
+    };
+
+    // Start + Up -> Velocity_Up
     fsm->states.back()->registered_checks.emplace_back(
         std::make_pair(
-            [&]()->bool{ return joy.start.on_pressed; }, // Start
-            FSMMode::Velocity
+            [&, check_policy_valid]()->bool{
+                return joy.start.on_pressed && joy.up.pressed && check_policy_valid("policy_dir_up"); 
+            }, 
+            FSMMode::Velocity_Up
         )
     );
-    fsm->add(new State_RLBase(FSMMode::Velocity, "Velocity"));
+    // Start + Down -> Velocity_Down
+    fsm->states.back()->registered_checks.emplace_back(
+        std::make_pair(
+            [&, check_policy_valid]()->bool{
+                return joy.start.on_pressed && joy.down.pressed && check_policy_valid("policy_dir_down"); 
+            }, 
+            FSMMode::Velocity_Down
+        )
+    );
+    // Start + Left -> Velocity_Left
+    fsm->states.back()->registered_checks.emplace_back(
+        std::make_pair(
+            [&, check_policy_valid]()->bool{ 
+                return joy.start.on_pressed && joy.left.pressed && check_policy_valid("policy_dir_left"); 
+            }, 
+            FSMMode::Velocity_Left
+        )
+    );
+    // Start + Right -> Velocity_Right
+    fsm->states.back()->registered_checks.emplace_back(
+        std::make_pair(
+            [&, check_policy_valid]()->bool{ 
+                return joy.start.on_pressed && joy.right.pressed && check_policy_valid("policy_dir_right"); 
+            }, 
+            FSMMode::Velocity_Right
+        )
+    );
+
+    fsm->add(new State_RLBase(FSMMode::Velocity_Up, "Velocity_Up", "policy_dir_up", "Velocity"));
+    fsm->add(new State_RLBase(FSMMode::Velocity_Down, "Velocity_Down", "policy_dir_down", "Velocity"));
+    fsm->add(new State_RLBase(FSMMode::Velocity_Left, "Velocity_Left", "policy_dir_left", "Velocity"));
+    fsm->add(new State_RLBase(FSMMode::Velocity_Right, "Velocity_Right", "policy_dir_right", "Velocity"));
 
     std::cout << "Press [L2 + A] to enter FixStand mode.\n";
-    std::cout << "And then press [Start] to start controlling the robot.\n";
+    std::cout << "Then press [Start + Up/Down/Left/Right] to select and start a policy.\n";
     std::cout << "Press [L2 + Y] to toggle fixed command execution (if enabled in config).\n";
 
     while (true)

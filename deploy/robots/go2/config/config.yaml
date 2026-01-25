@@ -12,8 +12,10 @@ FSM:
       [0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5],
     ]
   Velocity:
-    policy_dir: ../../../logs/rsl_rl/go2_moe_cts_expert_goal_137000_0.6745
-    # policy_dir: ../../../logs/rsl_rl/go2_rem_cts_fast_flat_v4_fz_82k
+    policy_dir_up: ../../../logs/rsl_rl/go2_moe_cts_expert_goal_137000_0.6745
+    policy_dir_down: ../../../logs/rsl_rl/go2_moe_cts_fast_flat_v4_fz_54k
+    policy_dir_left: null
+    policy_dir_right: null
     logging: false
     logging_dt: 0.01
     fixed_command:

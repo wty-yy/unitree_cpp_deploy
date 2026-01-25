@@ -3,12 +3,20 @@
 #include "isaaclab/envs/mdp/observations/observations.h"
 #include "isaaclab/envs/mdp/actions/joint_actions.h"
 
-State_RLBase::State_RLBase(int state_mode, std::string state_string)
+State_RLBase::State_RLBase(int state_mode, std::string state_string, std::string policy_key, std::string config_name)
 : FSMState(state_mode, state_string) 
 {
-    spdlog::info("Initializing State_{}...", state_string);
-    auto cfg = param::config["FSM"][state_string];
-    auto policy_dir = param::parser_policy_dir(cfg["policy_dir"].as<std::string>());
+    std::string config_key = config_name.empty() ? state_string : config_name;
+    spdlog::info("Initializing State_{} (Config: {})...", state_string, config_key);
+    auto cfg = param::config["FSM"][config_key];
+    
+    // Check if policy key exists and is not null
+    if (!cfg[policy_key] || cfg[policy_key].IsNull()) {
+        spdlog::warn("State_{}: Policy key '{}' is null or undefined. This state will be disabled.", state_string, policy_key);
+        return;
+    }
+
+    auto policy_dir = param::parser_policy_dir(cfg[policy_key].as<std::string>());
 
     env = std::make_unique<isaaclab::ManagerBasedRLEnv>(
         YAML::LoadFile(policy_dir / "params" / "deploy.yaml"),
@@ -65,6 +73,8 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
 
 void State_RLBase::run()
 {
+    if (!env) return;
+
     // Check for L2 + Y to toggle fixed command execution
     if (env->fixed_command_enabled) {
         auto & joy = lowstate->joystick;
@@ -168,6 +178,19 @@ void State_RLBase::run()
             logger->add("cmd_ns_0", lowstate->joystick.ly());
             logger->add("cmd_ns_1", -lowstate->joystick.lx());
             logger->add("cmd_ns_2", -lowstate->joystick.rx());
+
+            // Fixed command (log zeros when inactive)
+            float fixed_0 = 0.0f;
+            float fixed_1 = 0.0f;
+            float fixed_2 = 0.0f;
+            if (env->fixed_command_enabled && env->fixed_command_active) {
+                fixed_0 = env->fixed_lin_vel_x;
+                fixed_1 = env->fixed_lin_vel_y;
+                fixed_2 = env->fixed_ang_vel_z;
+            }
+            logger->add("cmd_fixed_0", fixed_0);
+            logger->add("cmd_fixed_1", fixed_1);
+            logger->add("cmd_fixed_2", fixed_2);
 
             std::vector<float> odom_pos(3), odom_vel(3);
             auto position_data = sportmodestate->msg_.position();

@@ -4,6 +4,11 @@
     - 在[config.yaml](deploy/robots/go2/config/config.yaml)的`fixed_command.enabled`字段打开该功能, 并设置固定指令值
     - 在真机上通过按键组合`L2 + Y`启动固定指令执行，并再次按下该组合键停止执行固定指令
     - `fixed_command`如果设置了默认执行时间`duration`，则在启动后会持续执行该指令一段时间后自动停止
+2. 新增四种模型选择, 删除原有的`Start`启动模型按键:
+    - Velocity_Up: 通过按键组合`Start + Up`切换到该模型, 使用`policy_dir_up`中的模型文件
+    - Velocity_Down: 通过按键组合`Start + Down`切换到该模型, 使用`policy_dir_down`中的模型文件
+    - Velocity_Left: 通过按键组合`Start + Left`切换到该模型, 使用`policy_dir_left`中的模型文件
+    - Velocity_Right: 通过按键组合`Start + Right`切换到该模型, 使用`policy_dir_right`中的模型文件
 ## 20251208 v0.1
 1. 新增运行时数据记录功能:
     - 在[config.yaml](deploy/robots/go2/config/config.yaml)的`logging`打开该功能, 及记录频率`logging_dt`
