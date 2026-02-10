@@ -1,4 +1,6 @@
 # UPDATE
+## 20260210 v0.2.1
+1. 修改moe模型命名为go2_moe_cts_137k_0.6739
 ## 20260125 v0.2
 1. 添加固定指令执行功能:
     - 在[config.yaml](deploy/robots/go2/config/config.yaml)的`fixed_command.enabled`字段打开该功能, 并设置固定指令值

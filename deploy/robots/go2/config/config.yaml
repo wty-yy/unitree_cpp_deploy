@@ -12,7 +12,7 @@ FSM:
       [0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5],
     ]
   Velocity:
-    policy_dir_up: ../../../logs/rsl_rl/go2_moe_cts_expert_goal_137000_0.6745  # best model
+    policy_dir_up: ../../../logs/rsl_rl/go2_moe_cts_137k_0.6739  # best model
     policy_dir_down: ../../../logs/rsl_rl/go2_moe_cts_fast_flat_v4_fz_54k  # fast model
     policy_dir_left: ../../../logs/rsl_rl/kaiwu2025_v6-2_124004  # not bad model
     policy_dir_right: null
