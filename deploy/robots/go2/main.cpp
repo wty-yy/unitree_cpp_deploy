@@ -5,7 +5,6 @@
 
 std::unique_ptr<LowCmd_t> FSMState::lowcmd = nullptr;
 std::shared_ptr<LowState_t> FSMState::lowstate = nullptr;
-std::shared_ptr<SportModeState_t> FSMState::sportmodestate = nullptr;
 std::shared_ptr<Keyboard> FSMState::keyboard = nullptr;
 
 void init_fsm_state()
@@ -20,7 +19,6 @@ void init_fsm_state()
     }
     FSMState::lowcmd = std::make_unique<LowCmd_t>();
     FSMState::lowstate = std::make_shared<LowState_t>();
-    FSMState::sportmodestate = std::make_shared<SportModeState_t>();
     spdlog::info("Waiting for connection to robot...");
     FSMState::lowstate->wait_for_connection();
     spdlog::info("Connected to robot.");

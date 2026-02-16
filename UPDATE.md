@@ -1,4 +1,28 @@
 # UPDATE
+## 20260216 v0.3
+**加入g1人形机器人适配更新，后续上传稳定运控模型**
+1. [manager_term_cfg.h](deploy/include/isaaclab/manager/manager_term_cfg.h):
+    - 新增 `get(int n)` 方法返回单帧数据, 修复 gym-style history 叠帧 bug (原 `get()` 返回全帧拼接, 外层再循环导致 5×5 膨胀)
+    - `ObsFunc` 签名增加 `YAML::Node params` 参数
+    - scale/clip 处理从 `get()` 移到 `add()` 中, 新增 `scale_first` 选项
+    - 新增 `params` 成员存储 term 配置, 新增 `size()` 方法
+2. [observation_manager.h](deploy/include/isaaclab/manager/observation_manager.h):
+    - 支持 observation group: 底层存储改为 `unordered_map<string, vector<ObservationTermCfg>>`, `compute()` 返回 `unordered_map<string, vector<float>>`
+    - gym-history 分支改用 `term.get(h)` 取单帧, 修复维度膨胀
+    - `REGISTER_OBSERVATION` 宏签名增加 `params` 参数
+    - 新增 `_prepare_group_terms()`, 自动识别单 group (flat) / 多 group 配置格式
+3. [algorithms.h](deploy/include/isaaclab/algorithms/algorithms.h):
+    - `act()` / `forward()` 入参从 `vector<float>` 改为 `unordered_map<string, vector<float>>`
+    - `OrtRunner` 动态检测所有模型 input 名称和 shape, 不再硬编码 `input_names={"obs"}`
+    - 支持多 input tensor 推理
+4. [observations.h](deploy/include/isaaclab/envs/mdp/observations/observations.h):
+    - 所有 term 处理函数签名增加 `YAML::Node params` 参数, 对应 `item["params"]` 内容, 从中读取配置参数
+    - `joint_pos`/`joint_pos_rel`/`joint_vel_rel` 改为从 `params["asset_cfg"]["joint_ids"]` 读取 `joint_ids`
+    - `gait_phase` 改为从 `params["period"]` 读取周期
+5. 新增[Observation Group](./docs/obs_group.md)使用说明
+
+## 20260211 v0.2.2
+1. SportModeState 高层估计，真机上没有用删掉
 ## 20260210 v0.2.1
 1. 修改moe模型命名为go2_moe_cts_137k_0.6739
 ## 20260125 v0.2
@@ -38,7 +62,7 @@
     "cmd_vel_y_no_scale": 范围(0,1)的y线速度指令 1
     "cmd_ang_z_no_scale": 范围(0,1)的z角速度指令 1
 
-    # SportModeState 高层估计
+    # SportModeState 高层估计 （没有用删掉）
     "position": 里程计估计的位置 3
     "velocity": 里程计估计的速度 3
     ```

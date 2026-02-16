@@ -4,60 +4,70 @@
 #pragma once
 
 #include <deque>
+#include <vector>
+#include <functional>
+#include <numeric>
 
 namespace isaaclab
 {
 
 class ManagerBasedRLEnv;
 
-using ObsFunc = std::function<std::vector<float>(ManagerBasedRLEnv*)>;
+using ObsFunc = std::function<std::vector<float>(ManagerBasedRLEnv*, YAML::Node)>;
 
 struct ObservationTermCfg
 {
+    YAML::Node params;
     ObsFunc func;
     std::vector<float> clip;
     std::vector<float> scale;
     int history_length = 1;
+    bool scale_first = false;
 
     void reset(std::vector<float> obs)
     {
-        for(int i(0); i < history_length; ++i)
-        {
-            add(obs);
-        }
+        for(int i(0); i < history_length; ++i) add(obs);
     }
 
     void add(std::vector<float> obs)
     {
-        buff_.push_back(obs);
-        if (buff_.size() > history_length)
+        for(int j = 0; j < obs.size(); ++j)
         {
-            buff_.pop_front();
-        }
-    }
-
-    // Complete circular buffer with most recent entry at the end and oldest entry at the beginning.
-    std::vector<float> get()
-    {
-        // get observation
-        std::vector<float> obs;
-        for (int i = 0; i < buff_.size(); ++i)
-        {
-            auto obs_i = buff_[i];
-            for(int j = 0; j < obs_i.size(); ++j)
-            {
+            if(scale_first) {
+                if(!scale.empty()) obs[j] *= scale[j];
                 if (!clip.empty()) {
-                    obs_i[j] = std::clamp(obs_i[j], clip[0], clip[1]);
+                    obs[j] = std::clamp(obs[j], clip[0], clip[1]);
                 }
-                if(!scale.empty()) obs_i[j] *= scale[j];
+            } else {
+                if (!clip.empty()) {
+                    obs[j] = std::clamp(obs[j], clip[0], clip[1]);
+                }
+                if(!scale.empty()) obs[j] *= scale[j];
             }
-            obs.insert(obs.end(), obs_i.begin(), obs_i.end());
         }
+        buff_.push_back(obs);
 
-        return obs;
+        if (buff_.size() > history_length) buff_.pop_front();
     }
+
+    // Get a single frame by index
+    const std::vector<float> & get(int n) const { return buff_[n]; }
+
+    // Get all frames concatenated (oldest first)
+    const std::vector<float> get() const
+    {
+        std::vector<float> concatenated;
+        for (const auto& entry : buff_) {
+            concatenated.insert(concatenated.end(), entry.begin(), entry.end());
+        }
+        return concatenated;
+    }
+
+    const std::size_t size() const { return std::accumulate(buff_.begin(), buff_.end(), 0,
+        [](std::size_t sum, const auto& v) { return sum + v.size(); }); }
 
 private:
+    // Complete circular buffer with most recent entry at the end and oldest entry at the beginning.
     std::deque<std::vector<float>> buff_;
 };
 

@@ -29,8 +29,8 @@ Before compiling and running, please ensure the following dependencies are insta
 - **Eigen3**: Matrix operation library.
 - **fmt**: Formatting library.
 - **onnxruntime**:
-   - Orin NX: Download [onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2) and extract it to the `deploy/thirdparty/` folder.
-   - x64 Linux: Download [onnxruntime-linux-x64-1.23.2.tgz](https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz) and extract it to the `deploy/thirdparty/` folder. Modify the ONNX link path in [{ROBOT}/CMakeLists.txt](deploy/robots/go2/CMakeLists.txt) (uncomment the corresponding lines).
+   - x64 Linux: Download [onnxruntime-linux-x64-1.23.2.tgz](https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz) and extract it to the `deploy/thirdparty/` folder.
+   - Orin NX: Download [onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2) and extract it to the `deploy/thirdparty/` folder. Modify the ONNX link path in [{ROBOT}/CMakeLists.txt](deploy/robots/go2/CMakeLists.txt) (uncomment the corresponding lines).
 
 > If deploying on the Orin NX onboard computer, install the aarch64 version of onnxruntime; if deploying via a x64 Linux computer connected by Ethernet, install the x64 version of onnxruntime and modify the ONNX link path accordingly.
 

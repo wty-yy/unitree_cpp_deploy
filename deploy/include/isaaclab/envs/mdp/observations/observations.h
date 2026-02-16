@@ -29,10 +29,9 @@ REGISTER_OBSERVATION(joint_pos)
     auto & asset = env->robot;
     std::vector<float> data;
 
-    auto cfg = env->cfg["observations"]["joint_pos"];
-    if(cfg["params"]["asset_cfg"]["joint_ids"].IsDefined())
+    if(params["asset_cfg"]["joint_ids"])
     {
-        auto joint_ids = cfg["params"]["asset_cfg"]["joint_ids"].as<std::vector<int>>();
+        auto joint_ids = params["asset_cfg"]["joint_ids"].as<std::vector<int>>();
         data.resize(joint_ids.size());
         for(size_t i = 0; i < joint_ids.size(); ++i)
         {
@@ -56,21 +55,18 @@ REGISTER_OBSERVATION(joint_pos_rel)
     auto & asset = env->robot;
     std::vector<float> data;
 
-    auto cfg = env->cfg["observations"]["joint_pos_rel"];
-    if(cfg["params"]["asset_cfg"]["joint_ids"].IsDefined())
+    if(params["asset_cfg"]["joint_ids"])
     {
-        auto joint_ids = cfg["params"]["asset_cfg"]["joint_ids"].as<std::vector<int>>();
+        auto joint_ids = params["asset_cfg"]["joint_ids"].as<std::vector<int>>();
         data.resize(joint_ids.size());
-        for(size_t i = 0; i < joint_ids.size(); ++i)
-        {
+        for(size_t i = 0; i < joint_ids.size(); ++i) {
             data[i] = asset->data.joint_pos[joint_ids[i]] - asset->data.default_joint_pos[joint_ids[i]];
         }
     }
     else
     {
         data.resize(asset->data.joint_pos.size());
-        for(size_t i = 0; i < asset->data.joint_pos.size(); ++i)
-        {
+        for(size_t i = 0; i < asset->data.joint_pos.size(); ++i) {
             data[i] = asset->data.joint_pos[i] - asset->data.default_joint_pos[i];
         }
     }
@@ -81,6 +77,17 @@ REGISTER_OBSERVATION(joint_pos_rel)
 REGISTER_OBSERVATION(joint_vel_rel)
 {
     auto & asset = env->robot;
+
+    if(params["asset_cfg"]["joint_ids"])
+    {
+        auto joint_ids = params["asset_cfg"]["joint_ids"].as<std::vector<int>>();
+        std::vector<float> data(joint_ids.size());
+        for(size_t i = 0; i < joint_ids.size(); ++i) {
+            data[i] = asset->data.joint_vel[joint_ids[i]];
+        }
+        return data;
+    }
+
     auto & data = asset->data.joint_vel;
     return std::vector<float>(data.data(), data.data() + data.size());
 }
@@ -126,7 +133,7 @@ REGISTER_OBSERVATION(velocity_commands)
 
 REGISTER_OBSERVATION(gait_phase)
 {
-    float period = env->cfg["observations"]["gait_phase"]["params"]["period"].as<float>();
+    float period = params["period"].as<float>();
     float delta_phase = env->step_dt * (1.0f / period);
 
     env->global_phase += delta_phase;

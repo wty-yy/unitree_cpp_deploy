@@ -192,16 +192,6 @@ void State_RLBase::run()
             logger->add("cmd_fixed_1", fixed_1);
             logger->add("cmd_fixed_2", fixed_2);
 
-            std::vector<float> odom_pos(3), odom_vel(3);
-            auto position_data = sportmodestate->msg_.position();
-            auto velocity_data = sportmodestate->msg_.velocity();
-            for (int i(0); i < 3; ++i) {
-                odom_pos[i] = position_data[i];
-                odom_vel[i] = velocity_data[i];
-            }
-            logger->add("odom_pos", odom_pos);
-            logger->add("odom_vel", odom_vel);
-
             logger->write();
         }
     }

@@ -29,8 +29,8 @@ unitree_rl_lab/
 - **Eigen3**: 矩阵运算库。
 - **fmt**: 格式化输出库。
 - **onnxruntime**:
-   - Orin NX: 需下载[onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2)解压到`deploy/thirdparty/`文件夹中
-   - x64 Linux: 需下载[onnxruntime-linux-x64-1.23.2.tgz](https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz)解压到`deploy/thirdparty/`文件夹中，修改[{ROBOT}/CMakeLists.txt](deploy/robots/go2/CMakeLists.txt)中的onnx链接路径(解开相应注释)
+   - x64 Linux: 需下载[onnxruntime-linux-x64-1.23.2.tgz](https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz)解压到`deploy/thirdparty/`文件夹中
+   - Orin NX: 需下载[onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2)解压到`deploy/thirdparty/`文件夹中，修改[{ROBOT}/CMakeLists.txt](deploy/robots/go2/CMakeLists.txt)中的onnx链接路径(解开相应注释)
 
 > 如果使用Orin NX机载电脑部署，则安装aarch64版本的onnxruntime；如果使用x64 Linux电脑链接网线部署，则安装x64版本的onnxruntime并修改ONNX链接路径。
 

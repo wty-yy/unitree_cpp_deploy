@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
-project(go2_controller)
+project(g1_29dof_controller)
+
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Boost REQUIRED COMPONENTS program_options)
 find_package(yaml-cpp REQUIRED)
@@ -25,10 +25,10 @@ link_libraries(
 )
 
 file(GLOB_RECURSE ADD_SRC_LIST
-  src/*.cpp
+  ${PROJECT_SOURCE_DIR}/src/*.cpp
 )
 
 add_library(${PROJECT_NAME}_lib ${ADD_SRC_LIST})
 link_libraries(${PROJECT_NAME}_lib)
 
-add_executable(go2_ctrl main.cpp)
+add_executable(g1_ctrl main.cpp)
