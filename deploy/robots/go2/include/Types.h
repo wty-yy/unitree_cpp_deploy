@@ -4,14 +4,3 @@
 
 using LowCmd_t = unitree::robot::go2::publisher::LowCmd;
 using LowState_t = unitree::robot::go2::subscription::LowState;
-
-enum FSMMode
-{
-    Passive = 1,
-    FixStand = 2,
-    Velocity = 3,
-    Velocity_Up = 4,
-    Velocity_Down = 5,
-    Velocity_Left = 6,
-    Velocity_Right = 7,
-};

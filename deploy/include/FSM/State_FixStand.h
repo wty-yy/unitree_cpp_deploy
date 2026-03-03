@@ -9,7 +9,8 @@
 class State_FixStand : public FSMState
 {
 public:
-    State_FixStand(int state) : FSMState(state, "FixStand") 
+    State_FixStand(int state, std::string state_string = "FixStand") 
+    : FSMState(state, state_string) 
     {
         ts_ = param::config["FSM"]["FixStand"]["ts"].as<std::vector<float>>();
         qs_ = param::config["FSM"]["FixStand"]["qs"].as<std::vector<std::vector<float>>>();
@@ -54,4 +55,6 @@ private:
     std::vector<float> ts_;
     std::vector<std::vector<float>> qs_;
 };
+
+REGISTER_FSM(State_FixStand)
 

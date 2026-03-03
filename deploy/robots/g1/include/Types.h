@@ -5,10 +5,3 @@
 
 using LowCmd_t = unitree::robot::g1::publisher::LowCmd;
 using LowState_t = unitree::robot::g1::subscription::LowState;
-
-enum FSMMode
-{
-    Passive = 1,
-    FixStand = 2,
-    Velocity = 3,
-};

@@ -1,5 +1,16 @@
 FSM:
+  _: # enabled fsms
+    Passive:
+      id: 1
+    FixStand:
+      id: 2
+    Velocity:
+      id: 3
+      type: RLBase
+
   Passive:
+    transitions: 
+      FixStand: LT + up.on_pressed
     mode: [
       1,1,1,1,1,1,
       1,1,1,1,1,1,
@@ -15,6 +26,9 @@ FSM:
       3,3,3,3,3,3,3,  
     ]
   FixStand:
+    transitions: 
+      Passive: LT + B.on_pressed
+      Velocity: RB + X.on_pressed
     kp: [
       100., 100., 100., 150., 40., 40.,
       100., 100., 100., 150., 40., 40.,
@@ -40,6 +54,6 @@ FSM:
       ]
     ]
   Velocity:
-    # policy_dir: ../../../logs/g1/g1_cts_v0.0.3_22k
-    # policy_dir: ../../../logs/g1/g1_moe_cts_v0.0.3.1_19k
-    policy_dir: ../../../logs/g1/g1_cts_v0.0.3.1_23k
+    transitions: 
+      Passive: LT + B.on_pressed
+    policy_dir: ../../../logs/g1/g1_moe_cts_v0.0.5_seed1_50k

@@ -6,15 +6,47 @@
 #include <unitree/common/thread/recurrent_thread.hpp>
 #include "BaseState.h"
 #include <spdlog/spdlog.h>
+#include <yaml-cpp/yaml.h>
 
 class CtrlFSM
 {
 public:
-    CtrlFSM(BaseState* initstate)
+    CtrlFSM(std::shared_ptr<BaseState> initstate)
     {
         // Initialize FSM states
-        states.push_back(initstate);
+        states.push_back(std::move(initstate));
 
+    }
+
+    CtrlFSM(YAML::Node cfg)
+    {
+        auto fsms = cfg["_"]; // enabled FSMs
+
+        // register FSM string map; used for state transition
+        for (auto it = fsms.begin(); it != fsms.end(); ++it)
+        {
+            std::string fsm_name = it->first.as<std::string>();
+            int id = it->second["id"].as<int>();
+            FSMStringMap.insert({id, fsm_name});
+        }
+
+        // Initialize FSM states
+        for (auto it = fsms.begin(); it != fsms.end(); ++it)
+        {
+            std::string fsm_name = it->first.as<std::string>();
+            int id = it->second["id"].as<int>();
+            std::string fsm_type = it->second["type"] ? it->second["type"].as<std::string>() : fsm_name;
+            auto fsm_class = getFsmMap().find("State_" + fsm_type);
+            if (fsm_class == getFsmMap().end()) {
+                throw std::runtime_error("FSM: Unknown FSM type " + fsm_type);
+            }
+            auto state_instance = fsm_class->second(id, fsm_name);
+            add(state_instance);
+        }
+    }
+
+    void start() 
+    {
         // Start From State_Passive
         currentState = states[0];
         currentState->enter();
@@ -24,7 +56,7 @@ public:
         spdlog::info("FSM: Start {}", currentState->getStateString());
     }
 
-    void add(BaseState *state)
+    void add(std::shared_ptr<BaseState> state)
     {
         for(auto & s : states)
         {
@@ -35,19 +67,15 @@ public:
             }
         }
 
-        states.push_back(state);
+        states.push_back(std::move(state));
     }
     
     ~CtrlFSM()
     {
-        for (auto state : states)
-        {
-            delete state;
-        }
         states.clear();
     }
 
-    std::vector<BaseState*> states;
+    std::vector<std::shared_ptr<BaseState>> states;
 private:
     const double dt = 0.001;
 
@@ -84,6 +112,6 @@ private:
         }
     }
 
-    BaseState *currentState;
+    std::shared_ptr<BaseState> currentState;
     unitree::common::RecurrentThreadPtr fsm_thread_;
 };

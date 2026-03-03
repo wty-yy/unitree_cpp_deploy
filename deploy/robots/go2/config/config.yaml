@@ -1,8 +1,33 @@
 FSM:
+  _: # enabled fsms
+    Passive:
+      id: 1
+    FixStand:
+      id: 2
+    Velocity_Up:
+      id: 4
+      type: RLBase
+    Velocity_Down:
+      id: 5
+      type: RLBase
+    Velocity_Left:
+      id: 6
+      type: RLBase
+    # Velocity_Right:
+    #   id: 7
+    #   type: RLBase
+
   Passive:
+    transitions: 
+      FixStand: LT + A.on_pressed
     mode: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     kd: [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
   FixStand:
+    transitions: 
+      Passive: LT + B.on_pressed
+      Velocity_Up: start + up
+      Velocity_Down: start + down
+      Velocity_Left: start + left
     kp: [60, 80, 80, 60, 80, 80, 60, 80, 80, 60, 80, 80]
     kd: [5, 4, 4, 5, 4, 4, 5, 4, 4, 5, 4, 4]
     ts: [0, 1, 2]
@@ -11,11 +36,12 @@ FSM:
       [0.0, 1.36, -2.65, 0.0, 1.36, -2.65, 0.0, 1.36, -2.65, 0.0, 1.36, -2.65],
       [0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5],
     ]
-  Velocity:
-    policy_dir_up: ../../../logs/go2/go2_moe_cts_137k_0.6739  # best model
-    policy_dir_down: ../../../logs/go2/go2_moe_cts_fast_flat_v4_fz_54k  # fast model
-    policy_dir_left: ../../../logs/go2/kaiwu2025_v6-2_124004  # not bad model
-    policy_dir_right: null
+  Velocity_Up:
+    transitions: 
+      Passive: LT + B.on_pressed
+      Velocity_Down: start + down
+      Velocity_Left: start + left
+    policy_dir: ../../../logs/go2/go2_moe_cts_137k_0.6739  # best model
     logging: false
     logging_dt: 0.01
     fixed_command:
@@ -23,4 +49,20 @@ FSM:
       lin_vel_x: 1.0
       lin_vel_y: 0.0
       ang_vel_z: 0.0
-      duration: 3.0  # seconds, set to null for indefinite duration
+      duration: 3.0
+  Velocity_Down:
+    transitions: 
+      Passive: LT + B.on_pressed
+      Velocity_Up: start + up
+      Velocity_Left: start + left
+    policy_dir: ../../../logs/go2/go2_moe_cts_fast_flat_v4_fz_54k  # fast model
+    logging: false
+    logging_dt: 0.01
+  Velocity_Left:
+    transitions: 
+      Passive: LT + B.on_pressed
+      Velocity_Up: start + up
+      Velocity_Down: start + down
+    policy_dir: ../../../logs/go2/kaiwu2025_v6-2_124004  # not bad model
+    logging: false
+    logging_dt: 0.01

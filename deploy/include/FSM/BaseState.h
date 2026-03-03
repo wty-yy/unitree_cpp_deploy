@@ -33,3 +33,21 @@ public:
 private:
     int state_;
 };
+
+using FsmFactory = std::function<std::shared_ptr<BaseState>(int, std::string)>;
+using FsmMap     = std::unordered_map<std::string, FsmFactory>;
+
+inline FsmMap& getFsmMap() {
+    static FsmMap fsmMap;
+    return fsmMap;
+}
+
+#define REGISTER_FSM(Derived) \
+    inline std::shared_ptr<BaseState> __factory_##Derived(int s, std::string ss) {      \
+        return std::make_shared<Derived>(s, ss);                                        \
+    }                                                                                   \
+    inline struct __registrar_##Derived {                                               \
+        __registrar_##Derived() {                                                       \
+            getFsmMap()[#Derived] = __factory_##Derived;                                \
+        }                                                                               \
+    } __registrar_instance_##Derived;

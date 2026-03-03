@@ -1,4 +1,30 @@
 # UPDATE
+## 20260301 v0.4
+**重构 FSM 框架: 从硬编码转为 YAML 配置驱动，支持声明式状态注册和跳转**
+
+1. [BaseState.h](deploy/include/FSM/BaseState.h):
+    - 新增 `FsmFactory`/`FsmMap` 工厂类型定义和 `getFsmMap()` 全局工厂注册表
+    - 新增 `REGISTER_FSM(Derived)` 宏，在头文件中自动注册 FSM 状态类到工厂
+2. [CtrlFSM.h](deploy/include/FSM/CtrlFSM.h):
+    - 新增 `CtrlFSM(YAML::Node cfg)` 构造函数，从配置文件 `FSM._` 节自动读取状态声明（id/type），通过工厂创建状态实例
+    - 分离 `start()` 方法，支持先注册再启动
+    - 状态管理从裸指针改为 `std::shared_ptr<BaseState>`
+3. [FSMState.h](deploy/include/FSM/FSMState.h):
+    - 移除硬编码的 `L2+B → Passive` 转换逻辑
+    - 新增从 YAML `transitions` 节读取跳转条件，使用 DSL 解析器将字符串表达式编译为运行时谓词
+4. 新增 [unitree_joystick_dsl.hpp](deploy/include/unitree_joystick_dsl.hpp):
+    - 手柄按键组合 DSL 解析器，支持 `+`(AND)、`|`(OR)、`!`(NOT)、`()`分组、`.on_pressed`/`.on_released`/`.pressed` 状态检测、`LT(2s)` 长按检测
+5. [State_FixStand.h](deploy/include/FSM/State_FixStand.h) / [State_Passive.h](deploy/include/FSM/State_Passive.h) / [State_RLBase.h](deploy/include/FSM/State_RLBase.h):
+    - 构造函数统一为 `(int state, std::string state_string)` 签名
+    - 添加 `REGISTER_FSM` 宏注册
+    - `State_RLBase` 移除 `policy_key`/`config_name` 参数，改为从 `FSM.{state_string}.policy_dir` 读取
+6. robots/g1、robots/go2 适配:
+    - `Types.h` 移除 `FSMMode` 枚举，状态 ID 改由 config.yaml 定义
+    - `main.cpp` 用 `CtrlFSM(param::config["FSM"])` + `fsm->start()` 替代手动创建和注册
+    - `State_RLBase.cpp` 适配新构造函数，用 `FSMStringMap.right.at("Passive")` 替代枚举
+    - `config.yaml` 新增 `_` 节声明状态和 `transitions` 节定义跳转条件
+7. 详细配置使用方法见 [docs/robot_params.md](docs/robot_params.md)
+
 ## 20260216 v0.3
 **加入g1人形机器人适配更新，后续上传稳定运控模型**
 1. [manager_term_cfg.h](deploy/include/isaaclab/manager/manager_term_cfg.h):

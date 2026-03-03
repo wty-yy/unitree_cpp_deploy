@@ -23,11 +23,16 @@ unitree_rl_lab/
 
 Before compiling and running, please ensure the following dependencies are installed on your development environment (Orin NX):
 
+```bash
+sudo apt install libboost-program-options-dev libyaml-cpp-dev libeigen3-dev libfmt-dev libspdlog-dev
+```
+
 - **[unitree_sdk2](https://github.com/unitreerobotics/unitree_sdk2)**: SDK for Unitree robot development.
 - **Boost**: For program options parsing (`program_options`).
 - **yaml-cpp**: For reading configuration files.
 - **Eigen3**: Matrix operation library.
 - **fmt**: Formatting library.
+- **spdlog**: Logging library.
 - **onnxruntime**:
    - x64 Linux: Download [onnxruntime-linux-x64-1.23.2.tgz](https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz) and extract it to the `deploy/thirdparty/` folder.
    - Orin NX: Download [onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2) and extract it to the `deploy/thirdparty/` folder. Modify the ONNX link path in [{ROBOT}/CMakeLists.txt](deploy/robots/go2/CMakeLists.txt) (uncomment the corresponding lines).

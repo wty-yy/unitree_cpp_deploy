@@ -3,20 +3,18 @@
 #include "isaaclab/envs/mdp/observations/observations.h"
 #include "isaaclab/envs/mdp/actions/joint_actions.h"
 
-State_RLBase::State_RLBase(int state_mode, std::string state_string, std::string policy_key, std::string config_name)
+State_RLBase::State_RLBase(int state_mode, std::string state_string)
 : FSMState(state_mode, state_string) 
 {
-    std::string config_key = config_name.empty() ? state_string : config_name;
-    spdlog::info("Initializing State_{} (Config: {})...", state_string, config_key);
-    auto cfg = param::config["FSM"][config_key];
+    auto cfg = param::config["FSM"][state_string];
     
-    // Check if policy key exists and is not null
-    if (!cfg[policy_key] || cfg[policy_key].IsNull()) {
-        spdlog::warn("State_{}: Policy key '{}' is null or undefined. This state will be disabled.", state_string, policy_key);
+    // Check if policy_dir exists and is not null
+    if (!cfg["policy_dir"] || cfg["policy_dir"].IsNull()) {
+        spdlog::warn("State_{}: Policy key 'policy_dir' is null or undefined. This state will be disabled.", state_string);
         return;
     }
 
-    auto policy_dir = param::parser_policy_dir(cfg[policy_key].as<std::string>());
+    auto policy_dir = param::parser_policy_dir(cfg["policy_dir"].as<std::string>());
 
     env = std::make_unique<isaaclab::ManagerBasedRLEnv>(
         YAML::LoadFile(policy_dir / "params" / "deploy.yaml"),
@@ -27,7 +25,7 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string, std::string
     this->registered_checks.emplace_back(
         std::make_pair(
             [&]()->bool{ return isaaclab::mdp::bad_orientation(env.get(), 2.0); },
-            (int)FSMMode::Passive
+            FSMStringMap.right.at("Passive")
         )
     );
 

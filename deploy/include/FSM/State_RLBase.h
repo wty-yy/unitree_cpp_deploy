@@ -12,7 +12,7 @@
 class State_RLBase : public FSMState
 {
 public:
-    State_RLBase(int state_mode, std::string state_string, std::string policy_key = "policy_dir", std::string config_name = "");
+    State_RLBase(int state_mode, std::string state_string);
     
     void enter()
     {
@@ -74,3 +74,5 @@ private:
     std::thread policy_thread;
     bool policy_thread_running = false;
 };
+
+REGISTER_FSM(State_RLBase)
