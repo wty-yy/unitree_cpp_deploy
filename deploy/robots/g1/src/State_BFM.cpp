@@ -240,6 +240,121 @@ void State_BFM::initialize_limits(const YAML::Node& cfg)
 
     last_action_.assign(dof, 0.0f);
     latest_q_target_ = default_joint_pos_;
+    initialize_waist_kalman(cfg, dof);
+}
+
+void State_BFM::initialize_waist_kalman(const YAML::Node& cfg, std::size_t dof)
+{
+    waist_kalman_enabled_ = false;
+    waist_kalman_joint_indices_ = {12, 13, 14};
+    waist_kalman_q_ = 1e-4f;
+    waist_kalman_r_ = 2e-3f;
+    waist_kalman_p0_ = 1e-2f;
+
+    const auto kalman_cfg = cfg["waist_kalman"];
+    if (!kalman_cfg || kalman_cfg.IsNull())
+    {
+        return;
+    }
+
+    waist_kalman_enabled_ = kalman_cfg["enabled"] ? kalman_cfg["enabled"].as<bool>() : true;
+    if (kalman_cfg["joint_indices"])
+    {
+        waist_kalman_joint_indices_ = kalman_cfg["joint_indices"].as<std::vector<int>>();
+    }
+    if (kalman_cfg["process_noise"])
+    {
+        waist_kalman_q_ = kalman_cfg["process_noise"].as<float>();
+    }
+    if (kalman_cfg["measurement_noise"])
+    {
+        waist_kalman_r_ = kalman_cfg["measurement_noise"].as<float>();
+    }
+    if (kalman_cfg["initial_error_cov"])
+    {
+        waist_kalman_p0_ = kalman_cfg["initial_error_cov"].as<float>();
+    }
+
+    waist_kalman_q_ = std::max(waist_kalman_q_, 1e-8f);
+    waist_kalman_r_ = std::max(waist_kalman_r_, 1e-8f);
+    waist_kalman_p0_ = std::max(waist_kalman_p0_, 1e-8f);
+
+    std::vector<int> valid_indices;
+    valid_indices.reserve(waist_kalman_joint_indices_.size());
+    for (int idx : waist_kalman_joint_indices_)
+    {
+        if (idx < 0 || static_cast<std::size_t>(idx) >= dof)
+        {
+            spdlog::warn("State_BFM: waist_kalman index {} out of range [0, {})", idx, dof);
+            continue;
+        }
+        valid_indices.push_back(idx);
+    }
+    waist_kalman_joint_indices_ = std::move(valid_indices);
+    if (waist_kalman_joint_indices_.empty())
+    {
+        waist_kalman_enabled_ = false;
+    }
+
+    waist_kalman_x_.assign(dof, 0.0f);
+    waist_kalman_p_.assign(dof, waist_kalman_p0_);
+    waist_kalman_initialized_.assign(dof, 0);
+
+    if (waist_kalman_enabled_)
+    {
+        spdlog::info(
+            "State_BFM: waist_kalman enabled, joint_count={}, q={}, r={}, p0={}",
+            waist_kalman_joint_indices_.size(),
+            waist_kalman_q_,
+            waist_kalman_r_,
+            waist_kalman_p0_);
+    }
+}
+
+void State_BFM::reset_waist_kalman_states(const std::vector<float>& joint_pos)
+{
+    if (!waist_kalman_enabled_)
+    {
+        return;
+    }
+
+    for (int idx : waist_kalman_joint_indices_)
+    {
+        waist_kalman_x_[idx] = joint_pos[idx];
+        waist_kalman_p_[idx] = waist_kalman_p0_;
+        waist_kalman_initialized_[idx] = 1;
+    }
+}
+
+void State_BFM::apply_waist_kalman_filter(std::vector<float>& q_target)
+{
+    if (!waist_kalman_enabled_)
+    {
+        return;
+    }
+
+    for (int idx : waist_kalman_joint_indices_)
+    {
+        if (!waist_kalman_initialized_[idx])
+        {
+            waist_kalman_x_[idx] = q_target[idx];
+            waist_kalman_p_[idx] = waist_kalman_p0_;
+            waist_kalman_initialized_[idx] = 1;
+            continue;
+        }
+
+        const float z = q_target[idx];
+        float x = waist_kalman_x_[idx];
+        float p = waist_kalman_p_[idx] + waist_kalman_q_;
+        const float k = p / (p + waist_kalman_r_);
+
+        x = x + k * (z - x);
+        p = (1.0f - k) * p;
+
+        waist_kalman_x_[idx] = x;
+        waist_kalman_p_[idx] = std::max(p, 1e-10f);
+        q_target[idx] = x;
+    }
 }
 
 void State_BFM::load_task_context(const YAML::Node& cfg)
@@ -474,6 +589,7 @@ void State_BFM::enter()
     {
         latest_q_target_[i] = env_->robot->data.joint_pos[i];
     }
+    reset_waist_kalman_states(latest_q_target_);
 
     use_policy_action_ = true;
     start_motion_ = false;
@@ -511,6 +627,8 @@ void State_BFM::enter()
             last_action_ = action;
 
             auto q_target = compute_q_target(action);
+            q_target = clamp_vec(q_target, joint_pos_lower_limit_, joint_pos_upper_limit_);
+            apply_waist_kalman_filter(q_target);
             q_target = clamp_vec(q_target, joint_pos_lower_limit_, joint_pos_upper_limit_);
 
             {

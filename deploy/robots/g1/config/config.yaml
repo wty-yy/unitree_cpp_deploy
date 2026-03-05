@@ -84,6 +84,12 @@ FSM:
     onnx_tensorrt: false
     onnx_cuda: true
     onnx_cuda_device: 0
+    waist_kalman:
+      enabled: true
+      joint_indices: [12, 13, 14]
+      process_noise: 1.0e-4
+      measurement_noise: 2.0e-3
+      initial_error_cov: 1.0e-2
     task_type: goal
     latent_file: goal_inference/goal_reaching.npz
     gamepad_map:
@@ -92,9 +98,19 @@ FSM:
     goal:
       selected_goals: [
         walk3_subject3_9044,
-        fallAndGetUp1_subject4_3350,
-        dance1_subject3_505,
-        dance2_subject4_700
+        fallAndGetUp1_subject4_3350, 
+        fallAndGetUp1_subject4_2230, 
+        dance1_subject3_505, 
+        dance1_subject3_4024, 
+        dance1_subject3_4700, 
+        dance2_subject4_700, 
+        fight1_subject3_5559, 
+        fight1_subject3_10229, 
+        fight1_subject3_11981, 
+        dance1_subject2_1150, 
+        dance1_subject2_2877, 
+        walk2_subject1_2588, 
+        fallAndGetUp1_subject4_2193, 
       ]
   BFM_reward:
     transitions: 
@@ -108,6 +124,12 @@ FSM:
     onnx_tensorrt: false
     onnx_cuda: true
     onnx_cuda_device: 0
+    waist_kalman:
+      enabled: true
+      joint_indices: [12, 13, 14]
+      process_noise: 1.0e-4
+      measurement_noise: 2.0e-3
+      initial_error_cov: 1.0e-2
     task_type: reward
     latent_file: reward_inference/reward_locomotion.npz
     gamepad_map:
@@ -116,11 +138,11 @@ FSM:
       reset_state: X.on_pressed
     reward:
       selected_rewards_filter_z:
+        - reward: move-ego-0-0
+          z_ids: [0]
         - reward: move-ego-low0.6-0-0.7
           z_ids: [0]
         - reward: move-ego-90-0.3
-          z_ids: [0]
-        - reward: move-ego-0-0
           z_ids: [0]
         - reward: spin-arms-5-l-l
           z_ids: [0]
@@ -136,6 +158,12 @@ FSM:
     onnx_tensorrt: false
     onnx_cuda: true
     onnx_cuda_device: 0
+    waist_kalman:
+      enabled: true
+      joint_indices: [12, 13, 14]
+      process_noise: 1.0e-4
+      measurement_noise: 2.0e-3
+      initial_error_cov: 1.0e-2
     task_type: tracking
     latent_file: tracking_inference/zs_walking.npz
     gamepad_map:

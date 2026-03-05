@@ -10,6 +10,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <mutex>
 #include <thread>
@@ -47,6 +48,9 @@ private:
     void load_task_context(const YAML::Node& cfg);
     void load_key_config(const YAML::Node& cfg);
     void initialize_limits(const YAML::Node& cfg);
+    void initialize_waist_kalman(const YAML::Node& cfg, std::size_t dof);
+    void reset_waist_kalman_states(const std::vector<float>& joint_pos);
+    void apply_waist_kalman_filter(std::vector<float>& q_target);
 
     std::vector<float> build_policy_obs() const;
     std::vector<float> build_policy_input();
@@ -116,6 +120,15 @@ private:
     std::vector<float> joint_pos_lower_limit_;
     std::vector<float> joint_pos_upper_limit_;
     std::vector<float> last_action_;
+
+    bool waist_kalman_enabled_{false};
+    std::vector<int> waist_kalman_joint_indices_{12, 13, 14};
+    float waist_kalman_q_{1e-4f};
+    float waist_kalman_r_{2e-3f};
+    float waist_kalman_p0_{1e-2f};
+    std::vector<float> waist_kalman_x_;
+    std::vector<float> waist_kalman_p_;
+    std::vector<std::uint8_t> waist_kalman_initialized_;
 
 };
 
