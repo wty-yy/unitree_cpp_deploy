@@ -81,6 +81,7 @@ FSM:
     policy_dir: ../../../logs/g1/bfm/official
     deploy_yaml: param/deploy.yaml
     onnx_model: exported/FBcprAuxModel.onnx
+    onnx_tensorrt: false
     onnx_cuda: true
     onnx_cuda_device: 0
     task_type: goal
@@ -104,6 +105,7 @@ FSM:
     policy_dir: ../../../logs/g1/bfm/official
     deploy_yaml: param/deploy.yaml
     onnx_model: exported/FBcprAuxModel.onnx
+    onnx_tensorrt: false
     onnx_cuda: true
     onnx_cuda_device: 0
     task_type: reward
@@ -131,6 +133,7 @@ FSM:
     policy_dir: ../../../logs/g1/bfm/official
     deploy_yaml: param/deploy.yaml
     onnx_model: exported/FBcprAuxModel.onnx
+    onnx_tensorrt: false
     onnx_cuda: true
     onnx_cuda_device: 0
     task_type: tracking

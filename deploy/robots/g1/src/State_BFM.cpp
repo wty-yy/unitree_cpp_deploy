@@ -28,7 +28,14 @@ std::string infer_task_type_from_name(const std::string& state_name)
     return "goal";
 }
 
-bool append_cuda_provider_if_available(Ort::SessionOptions& options, int device_id)
+enum class OnnxExecProvider
+{
+    TensorRT,
+    CUDA,
+    CPU
+};
+
+OnnxExecProvider append_best_provider(Ort::SessionOptions& options, int device_id, bool enable_tensorrt, bool enable_cuda)
 {
     const OrtApi& api = Ort::GetApi();
 
@@ -37,40 +44,59 @@ bool append_cuda_provider_if_available(Ort::SessionOptions& options, int device_
     OrtStatus* status = api.GetAvailableProviders(&providers, &provider_count);
     if (status != nullptr)
     {
+        spdlog::warn("State_BFM: GetAvailableProviders failed: {}", api.GetErrorMessage(status));
         api.ReleaseStatus(status);
-        return false;
+        return OnnxExecProvider::CPU;
     }
 
+    bool has_tensorrt = false;
     bool has_cuda = false;
     for (int i = 0; i < provider_count; ++i)
     {
-        if (std::string(providers[i]) == "CUDAExecutionProvider")
+        const std::string provider_name = providers[i];
+        if (provider_name == "TensorrtExecutionProvider")
+        {
+            has_tensorrt = true;
+        }
+        else if (provider_name == "CUDAExecutionProvider")
         {
             has_cuda = true;
-            break;
         }
     }
+
     OrtStatus* release_status = api.ReleaseAvailableProviders(providers, provider_count);
     if (release_status != nullptr)
     {
         api.ReleaseStatus(release_status);
     }
 
-    if (!has_cuda)
+    if (enable_tensorrt && has_tensorrt)
     {
-        return false;
-    }
-
-    OrtCUDAProviderOptions cuda_options;
-    cuda_options.device_id = device_id;
-    status = api.SessionOptionsAppendExecutionProvider_CUDA(options, &cuda_options);
-    if (status != nullptr)
-    {
+        OrtTensorRTProviderOptions trt_options{};
+        trt_options.device_id = device_id;
+        status = api.SessionOptionsAppendExecutionProvider_TensorRT(options, &trt_options);
+        if (status == nullptr)
+        {
+            return OnnxExecProvider::TensorRT;
+        }
+        spdlog::warn("State_BFM: append TensorRT provider failed: {}", api.GetErrorMessage(status));
         api.ReleaseStatus(status);
-        return false;
     }
 
-    return true;
+    if (enable_cuda && has_cuda)
+    {
+        OrtCUDAProviderOptions cuda_options{};
+        cuda_options.device_id = device_id;
+        status = api.SessionOptionsAppendExecutionProvider_CUDA(options, &cuda_options);
+        if (status == nullptr)
+        {
+            return OnnxExecProvider::CUDA;
+        }
+        spdlog::warn("State_BFM: append CUDA provider failed: {}", api.GetErrorMessage(status));
+        api.ReleaseStatus(status);
+    }
+
+    return OnnxExecProvider::CPU;
 }
 
 std::vector<float> clamp_vec(const std::vector<float>& x, const std::vector<float>& lo, const std::vector<float>& hi)
@@ -137,14 +163,12 @@ void State_BFM::load_policy_and_env(const YAML::Node& cfg)
     action_rescale_ = deploy_cfg["action_rescale"] ? deploy_cfg["action_rescale"].as<float>() : 5.0f;
 
     const bool prefer_cuda = cfg["onnx_cuda"] ? cfg["onnx_cuda"].as<bool>() : true;
+    const bool prefer_tensorrt = cfg["onnx_tensorrt"] ? cfg["onnx_tensorrt"].as<bool>() : true;
     const int cuda_device_id = cfg["onnx_cuda_device"] ? cfg["onnx_cuda_device"].as<int>() : 0;
 
     session_options_.SetGraphOptimizationLevel(ORT_ENABLE_EXTENDED);
-    bool cuda_enabled = false;
-    if (prefer_cuda)
-    {
-        cuda_enabled = append_cuda_provider_if_available(session_options_, cuda_device_id);
-    }
+    const OnnxExecProvider selected_provider =
+        append_best_provider(session_options_, cuda_device_id, prefer_tensorrt, prefer_cuda);
 
     session_ = std::make_unique<Ort::Session>(ort_env_, onnx_path.string().c_str(), session_options_);
 
@@ -177,9 +201,17 @@ void State_BFM::load_policy_and_env(const YAML::Node& cfg)
     }
 
     spdlog::info("State_BFM: loaded ONNX model: {}", onnx_path.string());
-    if (prefer_cuda)
+    if (selected_provider == OnnxExecProvider::TensorRT)
     {
-        spdlog::info("State_BFM: CUDA provider {}", cuda_enabled ? "enabled" : "not available, fallback to CPU");
+        spdlog::info("State_BFM: execution provider: TensorRT");
+    }
+    else if (selected_provider == OnnxExecProvider::CUDA)
+    {
+        spdlog::info("State_BFM: execution provider: CUDA");
+    }
+    else
+    {
+        spdlog::warn("State_BFM: TensorRT/CUDA provider not available, fallback to CPU");
     }
 }
 
