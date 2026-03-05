@@ -7,6 +7,15 @@ FSM:
     Velocity:
       id: 3
       type: RLBase
+    BFM_goal:
+      id: 4
+      type: BFM
+    BFM_reward:
+      id: 5
+      type: BFM
+    BFM_tracking:
+      id: 6
+      type: BFM
 
   Passive:
     transitions: 
@@ -29,6 +38,9 @@ FSM:
     transitions: 
       Passive: LT + B.on_pressed
       Velocity: RB + X.on_pressed
+      BFM_goal: RT + Y.on_pressed
+      BFM_reward: RT + A.on_pressed
+      BFM_tracking: RT + X.on_pressed
     kp: [
       100., 100., 100., 150., 40., 40.,
       100., 100., 100., 150., 40., 40.,
@@ -56,4 +68,81 @@ FSM:
   Velocity:
     transitions: 
       Passive: LT + B.on_pressed
-    policy_dir: ../../../logs/g1/g1_moe_cts_v0.0.5_seed1_50k
+      BFM_goal: RT + Y.on_pressed
+      BFM_reward: RT + A.on_pressed
+      BFM_tracking: RT + X.on_pressed
+    policy_dir: ../../../logs/g1/velocity/g1_moe_cts_v0.0.5_seed1_50k
+  BFM_goal:
+    transitions: 
+      Passive: LT + B.on_pressed
+      Velocity: RB + X.on_pressed
+      BFM_reward: RT + A.on_pressed
+      BFM_tracking: RT + X.on_pressed
+    policy_dir: ../../../logs/g1/bfm/official
+    deploy_yaml: param/deploy.yaml
+    onnx_model: exported/FBcprAuxModel.onnx
+    onnx_cuda: true
+    onnx_cuda_device: 0
+    task_type: goal
+    latent_file: goal_inference/goal_reaching.npz
+    gamepad_map:
+      next_latent: Y.on_pressed
+      reset_state: X.on_pressed
+    goal:
+      selected_goals: [
+        walk3_subject3_9044,
+        fallAndGetUp1_subject4_3350,
+        dance1_subject3_505,
+        dance2_subject4_700
+      ]
+  BFM_reward:
+    transitions: 
+      Passive: LT + B.on_pressed
+      Velocity: RB + X.on_pressed
+      BFM_goal: RT + Y.on_pressed
+      BFM_tracking: RT + X.on_pressed
+    policy_dir: ../../../logs/g1/bfm/official
+    deploy_yaml: param/deploy.yaml
+    onnx_model: exported/FBcprAuxModel.onnx
+    onnx_cuda: true
+    onnx_cuda_device: 0
+    task_type: reward
+    latent_file: reward_inference/reward_locomotion.npz
+    gamepad_map:
+      start_motion: B.on_pressed
+      next_latent: Y.on_pressed
+      reset_state: X.on_pressed
+    reward:
+      selected_rewards_filter_z:
+        - reward: move-ego-low0.6-0-0.7
+          z_ids: [0]
+        - reward: move-ego-90-0.3
+          z_ids: [0]
+        - reward: move-ego-0-0
+          z_ids: [0]
+        - reward: spin-arms-5-l-l
+          z_ids: [0]
+  BFM_tracking:
+    transitions: 
+      Passive: LT + B.on_pressed
+      Velocity: RB + X.on_pressed
+      BFM_goal: RT + Y.on_pressed
+      BFM_reward: RT + A.on_pressed
+    policy_dir: ../../../logs/g1/bfm/official
+    deploy_yaml: param/deploy.yaml
+    onnx_model: exported/FBcprAuxModel.onnx
+    onnx_cuda: true
+    onnx_cuda_device: 0
+    task_type: tracking
+    latent_file: tracking_inference/zs_walking.npz
+    gamepad_map:
+      start_motion: B.on_pressed
+      next_latent: Y.on_pressed
+      reset_state: X.on_pressed
+    tracking:
+      key: data
+      start: 0
+      end: 2000
+      stop: 0
+      gamma: 0.8
+      window_size: 3

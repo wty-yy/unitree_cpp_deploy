@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.12)
 project(g1_29dof_controller)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+add_subdirectory(${PROJECT_SOURCE_DIR}/../../thirdparty/cnpy ${CMAKE_BINARY_DIR}/cnpy)
 
 find_package(Boost REQUIRED COMPONENTS program_options)
 find_package(yaml-cpp REQUIRED)
@@ -11,8 +14,10 @@ include_directories(
   /usr/local/include/ddscxx # dds
   /usr/local/include/iceoryx/v2.0.2 # dds
   include
+  ${PROJECT_SOURCE_DIR}/../../thirdparty/cnpy
   # ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-aarch64-gpu-1.16.0/include
-  ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-x64-1.23.2/include
+  # ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-x64-1.23.2/include
+  ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-x64-gpu-1.24.2/include
   ${PROJECT_SOURCE_DIR}/../../thirdparty/
   ${PROJECT_SOURCE_DIR}/../../include/
 )
@@ -20,8 +25,10 @@ include_directories(
 link_libraries(
   unitree_sdk2 ddsc ddscxx rt pthread # dds
   libboost_program_options.a libyaml-cpp.a fmt
+  cnpy
   # ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-aarch64-gpu-1.16.0/lib/libonnxruntime.so.1.16.0
-  ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-x64-1.23.2/lib/libonnxruntime.so.1.23.2
+  # ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-x64-1.23.2/lib/libonnxruntime.so.1.23.2
+  ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-x64-gpu-1.24.2/lib/libonnxruntime.so.1.24.2
 )
 
 file(GLOB_RECURSE ADD_SRC_LIST

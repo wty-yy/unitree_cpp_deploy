@@ -1,4 +1,25 @@
 # UPDATE
+## 20260305 v0.5
+**新增G1 BFM-Zero部署支持Onnxruntime CUDA加速**
+1. 新增 [State_BFM.h](deploy/robots/g1/include/State_BFM.h) / [State_BFM.cpp](deploy/robots/g1/src/State_BFM.cpp):
+    - 支持 G1 BFM-Zero 三种任务模式: `goal` / `reward` / `tracking`
+    - 支持从 `npz` 读取潜变量 (`goal_inference` / `reward_inference` / `tracking_inference`)
+    - ONNX Runtime 推理默认优先使用 CUDA，自动回退 CPU
+    - 新增推理线程内统计并打印区间平均推理耗时 `avg_infer_ms`
+2. FSM 集成:
+    - 在 [main.cpp](deploy/robots/g1/main.cpp) 注册 `State_BFM`
+    - 在 [config.yaml](deploy/robots/g1/config/config.yaml) 增加 `BFM_goal` / `BFM_reward` / `BFM_tracking` 配置项
+    - 新增 `Velocity` 与 `BFM_*` 之间两两切换（与 `FixStand` 触发按键保持一致）
+3. BFM 手柄控制逻辑与 Python 对齐:
+    - 进入 BFM 状态后默认启用策略
+    - 保留 `start` / `next` / `reset` 三类交互
+4. BFM 观测构建重构:
+    - 从“完全手写历史缓存”改为复用 FSM `ObservationManager`
+    - BFM `deploy.yaml` 的 `observations` 改为 `obs_base` + `obs_hist` 双组，解决同名 key 冲突
+    - `State_BFM` 中按固定顺序拼接 `obs_base + obs_hist`，并将历史帧顺序转换为与 Python 一致
+5. 文档更新:
+    - 完善 [docs/g1_setup_zh.md](docs/g1_setup_zh.md) 的 G1 BFM 使用方法与配置说明
+
 ## 20260301 v0.4
 **重构 FSM 框架: 从硬编码转为 YAML 配置驱动，支持声明式状态注册和跳转**
 
