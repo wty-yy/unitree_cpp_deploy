@@ -1,5 +1,23 @@
 # UPDATE
-## 20260316 v0.5.1
+## 20260316
+### v0.6
+**新增OmniXtreme模型**
+1. 新增 [State_OmniXtreme.h](deploy/robots/g1/include/State_OmniXtreme.h) / [State_OmniXtreme.cpp](deploy/robots/g1/src/State_OmniXtreme.cpp):
+    - 接入 G1 OmniXtreme base policy + residual policy + FK ONNX 推理
+    - 支持从 `motion npz` 读取参考轨迹，并在状态内完成 `PERM/INV_PERM` 顺序转换
+    - 支持初始 yaw 对齐、anchor 6D 姿态构造、残差观测拼接、真机 PD/friction/envelope 控制输出
+2. FSM 与配置集成:
+    - 在 [config.yaml](deploy/robots/g1/config/config.yaml) 新增 `OmniXtreme` 状态
+    - 新增 `RT + X.on_pressed` 进入 OmniXtreme
+    - `Y.on_pressed` 切换轨迹, `X.on_pressed` 重置当前轨迹
+3. 文档更新:
+    - 在 [docs/g1_setup_zh.md](docs/g1_setup_zh.md) 增加 OmniXtreme 配置说明
+4. 使用注意:
+    - `params/deploy.yaml` 的 `joint_ids_map` 必须与训练时 G1 URDF 顺序一致
+    - 轨迹 `body_quat_w` 与 FK `rot` 输出按 `wxyz` 解释
+    - raw action 不做额外 `[-1, 1]` 裁剪，动作保护依赖关节限位与 envelope
+    - 进入状态前机器人姿态应尽量接近目标轨迹首帧
+### v0.5.1
 **新增G1 Loco v0.0.5.1模型，降低踏地的声音**
 1. 删除之前的v0.0.5运控模型，新增v0.0.5.1，并在配置中加入对BFM-Zero支持，在摔倒后可以通过BFM重新站立后进入运控
 2. 切换运控RB+Y，切换BFM RT+Y

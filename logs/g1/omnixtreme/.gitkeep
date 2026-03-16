@@ -1,0 +1,6 @@
+Download the OmniXtreme model from [Google Drive - official_omnixtreme.tar.zst](https://drive.google.com/file/d/1ffYiU07X2I-bpAYFBqg3ekJ4VNndMIrL/view?usp=sharing) and save it to the `logs/g1/omnixtreme` folder (HERE).
+
+```bash
+mv official_omnixtreme.tar.zst logs/g1/omnixtreme/
+tar -xvf official_omnixtreme.tar.zst
+```

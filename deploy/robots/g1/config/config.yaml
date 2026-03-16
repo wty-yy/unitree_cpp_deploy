@@ -10,6 +10,9 @@ FSM:
     BFM_goal:
       id: 4
       type: BFM
+    OmniXtreme:
+      id: 5
+      type: OmniXtreme
 
   Passive:
     transitions: 
@@ -33,6 +36,7 @@ FSM:
       Passive: LT + B.on_pressed
       Velocity_Y: RB + Y.on_pressed
       BFM_goal: RT + Y.on_pressed
+      OmniXtreme: RT + X.on_pressed
     kp: [
       100., 100., 100., 150., 40., 40.,
       100., 100., 100., 150., 40., 40.,
@@ -61,12 +65,14 @@ FSM:
     transitions: 
       Passive: LT + B.on_pressed
       BFM_goal: RT + Y.on_pressed
+      OmniXtreme: RT + X.on_pressed
     policy_dir: ../../../logs/g1/velocity/g1_moe_cts_v0.0.5.1
 
   BFM_goal:
     transitions: 
       Passive: LT + B.on_pressed
       Velocity_Y: RB + Y.on_pressed
+      OmniXtreme: RT + X.on_pressed
     policy_dir: ../../../logs/g1/bfm/official
     deploy_yaml: param/deploy.yaml
     onnx_model: exported/FBcprAuxModel.onnx
@@ -91,3 +97,36 @@ FSM:
         fight1_subject3_5559, 
         fallAndGetUp1_subject4_2193,
       ]
+  OmniXtreme:
+    transitions:
+      Passive: LT + B.on_pressed
+      Velocity_Y: RB + Y.on_pressed
+      BFM_goal: RT + Y.on_pressed
+    policy_dir: ../../../logs/g1/omnixtreme/official
+    deploy_yaml: params/deploy.yaml
+    base_model: exported/base_policy_trt.onnx
+    residual_model: exported/residual_policy.onnx
+    fk_model: exported/fk_trt.onnx
+    # motions_dir: exported/motions  # Optional, load from motion_files if specified
+    motion_files:
+      - exported/motions/4.npz
+      - exported/motions/5.npz
+      - exported/motions/9.npz
+      - exported/motions/10.npz
+      - exported/motions/11.npz
+      - exported/motions/13.npz
+      # - exported/motions/motion.npz
+    onnx_tensorrt: false
+    onnx_cuda: true
+    onnx_cuda_device: 0
+    action_clip: 1.0
+    residual_scale: 1.0
+    loop_trajectory: true
+    root_body_index: 0
+    # body_quat_w 中用于构造 anchor_ori_6d 的 body 索引；当前与 deploy_mujoco.py 的 bm_anchor_id=9 对齐
+    anchor_body_index: 9
+    gamepad_map:
+      next_trajectory: Y.on_pressed
+      previous_trajectory: A.on_pressed
+      reset_trajectory: X.on_pressed
+      toggle_execute: B.on_pressed

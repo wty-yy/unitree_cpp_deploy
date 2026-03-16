@@ -34,19 +34,37 @@ public:
         robot->data.joint_vel.resize(robot->data.joint_ids_map.size());
 
         { // default joint positions
-            auto default_joint_pos = cfg["default_joint_pos"].as<std::vector<float>>();
+            std::vector<float> default_joint_pos(robot->data.joint_ids_map.size(), 0.0f);
+            if (cfg["default_joint_pos"])
+            {
+                default_joint_pos = cfg["default_joint_pos"].as<std::vector<float>>();
+            }
             robot->data.default_joint_pos = Eigen::VectorXf::Map(default_joint_pos.data(), default_joint_pos.size());
         }
         { // joint stiffness and damping
-            robot->data.joint_stiffness = cfg["stiffness"].as<std::vector<float>>();
-            robot->data.joint_damping = cfg["damping"].as<std::vector<float>>();
+            robot->data.joint_stiffness.assign(robot->data.joint_ids_map.size(), 0.0f);
+            robot->data.joint_damping.assign(robot->data.joint_ids_map.size(), 0.0f);
+            if (cfg["stiffness"])
+            {
+                robot->data.joint_stiffness = cfg["stiffness"].as<std::vector<float>>();
+            }
+            if (cfg["damping"])
+            {
+                robot->data.joint_damping = cfg["damping"].as<std::vector<float>>();
+            }
         }
 
         robot->update();
 
         // load managers
-        action_manager = std::make_unique<ActionManager>(cfg["actions"], this);
-        observation_manager = std::make_unique<ObservationManager>(cfg["observations"], this);
+        if (cfg["actions"])
+        {
+            action_manager = std::make_unique<ActionManager>(cfg["actions"], this);
+        }
+        if (cfg["observations"])
+        {
+            observation_manager = std::make_unique<ObservationManager>(cfg["observations"], this);
+        }
     }
 
     void reset()
@@ -57,8 +75,8 @@ public:
         if(robot->data.motion_loader) {
             robot->data.motion_loader->reset(robot->data);
         }
-        action_manager->reset();
-        observation_manager->reset();
+        if (action_manager) action_manager->reset();
+        if (observation_manager) observation_manager->reset();
     }
 
     void step()
@@ -67,6 +85,10 @@ public:
         robot->update();
         if(robot->data.motion_loader) {
             robot->data.motion_loader->update(episode_length * step_dt);
+        }
+        if (!observation_manager || !action_manager || !alg)
+        {
+            throw std::runtime_error("ManagerBasedRLEnv::step requires observation_manager, action_manager and alg");
         }
         auto obs = observation_manager->compute();
         
