@@ -1,4 +1,9 @@
 # UPDATE
+## 20260316 v0.5.1
+**新增G1 Loco v0.0.5.1模型，降低踏地的声音**
+1. 删除之前的v0.0.5运控模型，新增v0.0.5.1，并在配置中加入对BFM-Zero支持，在摔倒后可以通过BFM重新站立后进入运控
+2. 切换运控RB+Y，切换BFM RT+Y
+
 ## 20260305 v0.5
 **新增G1 BFM-Zero部署支持Onnxruntime CUDA加速**
 1. 新增 [State_BFM.h](deploy/robots/g1/include/State_BFM.h) / [State_BFM.cpp](deploy/robots/g1/src/State_BFM.cpp):

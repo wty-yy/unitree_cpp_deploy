@@ -1,0 +1,6 @@
+Download the BFM-Zero model from [Google Drive - official_bfm.tar.zst](https://drive.google.com/file/d/1cvdXCLbvyO22YmiV5_FiQPpcx9g3vnGM) and save it to the `logs/g1/bfm` folder (HERE).
+
+```bash
+mv official_bfm.tar.zst logs/g1/bfm/
+tar -xvf official_bfm.tar.zst
+```
