@@ -29,7 +29,13 @@ constexpr std::array<int, 29> kInvPerm = {
     0, 6, 12, 1, 7, 13, 2, 8, 14, 3, 9, 15, 22, 4, 10, 16, 23, 5, 11, 17, 24, 18, 25, 19, 26, 20, 27, 21, 28
 };
 
-OnnxExecProvider append_best_provider(Ort::SessionOptions& options, int device_id, bool enable_tensorrt, bool enable_cuda)
+OnnxExecProvider append_best_provider(
+    Ort::SessionOptions& options,
+    int device_id,
+    bool enable_tensorrt,
+    bool enable_cuda,
+    bool trt_fp16_enable,
+    const std::string& trt_cache_path)
 {
     const OrtApi& api = Ort::GetApi();
 
@@ -68,6 +74,11 @@ OnnxExecProvider append_best_provider(Ort::SessionOptions& options, int device_i
     {
         OrtTensorRTProviderOptions trt_options{};
         trt_options.device_id = device_id;
+        trt_options.trt_max_partition_iterations = 1000;
+        trt_options.trt_min_subgraph_size = 1;
+        trt_options.trt_fp16_enable = trt_fp16_enable ? 1 : 0;
+        trt_options.trt_engine_cache_enable = trt_cache_path.empty() ? 0 : 1;
+        trt_options.trt_engine_cache_path = trt_cache_path.empty() ? nullptr : trt_cache_path.c_str();
         status = api.SessionOptionsAppendExecutionProvider_TensorRT(options, &trt_options);
         if (status == nullptr)
         {
@@ -193,18 +204,20 @@ State_OmniXtreme::State_OmniXtreme(int state_mode, std::string state_string)
 
 void State_OmniXtreme::load_policy_and_env(const YAML::Node& cfg)
 {
+    using clock = std::chrono::steady_clock;
+
     if (!cfg["policy_dir"] || cfg["policy_dir"].IsNull())
     {
         throw std::runtime_error("State_OmniXtreme: policy_dir is required");
     }
 
-    const auto policy_dir = param::parser_policy_dir(cfg["policy_dir"].as<std::string>());
+    policy_dir_ = param::parser_policy_dir(cfg["policy_dir"].as<std::string>());
     const auto deploy_rel = cfg["deploy_yaml"] ? cfg["deploy_yaml"].as<std::string>() : "params/deploy.yaml";
     const auto base_model_rel = cfg["base_model"] ? cfg["base_model"].as<std::string>() : "exported/base_policy_trt.onnx";
     const auto residual_model_rel = cfg["residual_model"] ? cfg["residual_model"].as<std::string>() : "exported/residual_policy.onnx";
     const auto fk_model_rel = cfg["fk_model"] ? cfg["fk_model"].as<std::string>() : "exported/fk_trt.onnx";
 
-    auto deploy_cfg = YAML::LoadFile((policy_dir / deploy_rel).string());
+    auto deploy_cfg = YAML::LoadFile((policy_dir_ / deploy_rel).string());
     deploy_cfg_ = deploy_cfg;
     env_ = std::make_unique<isaaclab::ManagerBasedRLEnv>(
         deploy_cfg,
@@ -219,15 +232,54 @@ void State_OmniXtreme::load_policy_and_env(const YAML::Node& cfg)
     const bool prefer_cuda = cfg["onnx_cuda"] ? cfg["onnx_cuda"].as<bool>() : true;
     const bool prefer_tensorrt = cfg["onnx_tensorrt"] ? cfg["onnx_tensorrt"].as<bool>() : true;
     const int cuda_device_id = cfg["onnx_cuda_device"] ? cfg["onnx_cuda_device"].as<int>() : 0;
+    const bool trt_fp16_enable = cfg["onnx_trt_fp16"] ? cfg["onnx_trt_fp16"].as<bool>() : true;
+    const std::string trt_cache_dir =
+        cfg["onnx_trt_cache_dir"] ? cfg["onnx_trt_cache_dir"].as<std::string>() : "trt_cache";
+    const std::filesystem::path trt_cache_path =
+        trt_cache_dir.empty() ? std::filesystem::path() : (policy_dir_ / trt_cache_dir);
+    if (!trt_cache_path.empty())
+    {
+        std::filesystem::create_directories(trt_cache_path);
+    }
 
     base_session_options_.SetGraphOptimizationLevel(ORT_ENABLE_EXTENDED);
     residual_session_options_.SetGraphOptimizationLevel(ORT_ENABLE_EXTENDED);
-    append_best_provider(base_session_options_, cuda_device_id, prefer_tensorrt, prefer_cuda);
-    append_best_provider(residual_session_options_, cuda_device_id, prefer_tensorrt, prefer_cuda);
+    const OnnxExecProvider base_provider = append_best_provider(
+        base_session_options_, cuda_device_id, prefer_tensorrt, prefer_cuda, trt_fp16_enable, trt_cache_path.string());
+    const OnnxExecProvider residual_provider = append_best_provider(
+        residual_session_options_, cuda_device_id, prefer_tensorrt, prefer_cuda, trt_fp16_enable, trt_cache_path.string());
+    Ort::SessionOptions fk_session_options;
+    fk_session_options.SetGraphOptimizationLevel(ORT_ENABLE_EXTENDED);
+    const OnnxExecProvider fk_provider = append_best_provider(
+        fk_session_options, cuda_device_id, prefer_tensorrt, prefer_cuda, trt_fp16_enable, trt_cache_path.string());
 
-    base_session_ = std::make_unique<Ort::Session>(ort_env_, (policy_dir / base_model_rel).string().c_str(), base_session_options_);
-    residual_session_ = std::make_unique<Ort::Session>(ort_env_, (policy_dir / residual_model_rel).string().c_str(), residual_session_options_);
-    fk_session_ = std::make_unique<Ort::Session>(ort_env_, (policy_dir / fk_model_rel).string().c_str(), base_session_options_);
+    const auto base_model_path = (policy_dir_ / base_model_rel).string();
+    const auto residual_model_path = (policy_dir_ / residual_model_rel).string();
+    const auto fk_model_path = (policy_dir_ / fk_model_rel).string();
+
+    spdlog::info("State_OmniXtreme: loading base model {}", base_model_path);
+    auto t0 = clock::now();
+    base_session_ = std::make_unique<Ort::Session>(ort_env_, base_model_path.c_str(), base_session_options_);
+    auto t1 = clock::now();
+    spdlog::info(
+        "State_OmniXtreme: base model ready in {:.3f}s",
+        std::chrono::duration<double>(t1 - t0).count());
+
+    spdlog::info("State_OmniXtreme: loading residual model {}", residual_model_path);
+    t0 = clock::now();
+    residual_session_ = std::make_unique<Ort::Session>(ort_env_, residual_model_path.c_str(), residual_session_options_);
+    t1 = clock::now();
+    spdlog::info(
+        "State_OmniXtreme: residual model ready in {:.3f}s",
+        std::chrono::duration<double>(t1 - t0).count());
+
+    spdlog::info("State_OmniXtreme: loading fk model {}", fk_model_path);
+    t0 = clock::now();
+    fk_session_ = std::make_unique<Ort::Session>(ort_env_, fk_model_path.c_str(), fk_session_options);
+    t1 = clock::now();
+    spdlog::info(
+        "State_OmniXtreme: fk model ready in {:.3f}s",
+        std::chrono::duration<double>(t1 - t0).count());
 
     for (std::size_t i = 0; i < base_session_->GetInputCount(); ++i)
     {
@@ -278,6 +330,24 @@ void State_OmniXtreme::load_policy_and_env(const YAML::Node& cfg)
     {
         residual_action_output_name_ = residual_output_names_str_.front();
     }
+
+    auto log_provider = [](const char* model_name, OnnxExecProvider provider) {
+        if (provider == OnnxExecProvider::TensorRT)
+        {
+            spdlog::info("State_OmniXtreme: {} execution provider: TensorRT", model_name);
+        }
+        else if (provider == OnnxExecProvider::CUDA)
+        {
+            spdlog::info("State_OmniXtreme: {} execution provider: CUDA", model_name);
+        }
+        else
+        {
+            spdlog::warn("State_OmniXtreme: {} execution provider fallback to CPU", model_name);
+        }
+    };
+    log_provider("base model", base_provider);
+    log_provider("residual model", residual_provider);
+    log_provider("fk model", fk_provider);
 
     for (std::size_t i = 0; i < fk_session_->GetOutputCount(); ++i)
     {
@@ -331,6 +401,16 @@ void State_OmniXtreme::initialize_limits(const YAML::Node& cfg)
 
     action_clip_ = cfg["action_clip"] ? cfg["action_clip"].as<float>() : 1.0f;
     residual_scale_ = cfg["residual_scale"] ? cfg["residual_scale"].as<float>() : 1.0f;
+    q_target_lpf_alpha_ = cfg["q_target_lpf_alpha"] ? cfg["q_target_lpf_alpha"].as<float>() : 0.8f;
+    tau_ff_lpf_alpha_ = cfg["tau_ff_lpf_alpha"] ? cfg["tau_ff_lpf_alpha"].as<float>() : 0.8f;
+    waist_q_target_lpf_alpha_ =
+        cfg["waist_q_target_lpf_alpha"] ? cfg["waist_q_target_lpf_alpha"].as<float>() : q_target_lpf_alpha_;
+    waist_tau_ff_lpf_alpha_ =
+        cfg["waist_tau_ff_lpf_alpha"] ? cfg["waist_tau_ff_lpf_alpha"].as<float>() : 0.5f;
+    q_target_lpf_alpha_ = std::clamp(q_target_lpf_alpha_, 0.0f, 1.0f);
+    tau_ff_lpf_alpha_ = std::clamp(tau_ff_lpf_alpha_, 0.0f, 1.0f);
+    waist_q_target_lpf_alpha_ = std::clamp(waist_q_target_lpf_alpha_, 0.0f, 1.0f);
+    waist_tau_ff_lpf_alpha_ = std::clamp(waist_tau_ff_lpf_alpha_, 0.0f, 1.0f);
     loop_trajectory_ = cfg["loop_trajectory"] ? cfg["loop_trajectory"].as<bool>() : true;
     const YAML::Node omni_cfg = deploy_cfg_["omnixtreme"];
     p_gains_ = require_vec(omni_cfg, "p_gains", dof_);
@@ -350,9 +430,8 @@ void State_OmniXtreme::initialize_limits(const YAML::Node& cfg)
 
 void State_OmniXtreme::load_motion_library(const YAML::Node& cfg)
 {
-    const auto policy_dir = param::parser_policy_dir(cfg["policy_dir"].as<std::string>());
     const auto motions_rel = cfg["motions_dir"] ? cfg["motions_dir"].as<std::string>() : "exported/motions";
-    const auto motions_dir = policy_dir / motions_rel;
+    const auto motions_dir = policy_dir_ / motions_rel;
     if (cfg["root_body_index"]) root_body_index_ = cfg["root_body_index"].as<int>();
     if (cfg["anchor_body_index"]) anchor_body_index_ = cfg["anchor_body_index"].as<int>();
 
@@ -363,7 +442,7 @@ void State_OmniXtreme::load_motion_library(const YAML::Node& cfg)
         motion_files.reserve(configured_files.size());
         for (const auto& rel_path : configured_files)
         {
-            const auto path = policy_dir / rel_path;
+            const auto path = policy_dir_ / rel_path;
             if (!std::filesystem::exists(path))
             {
                 throw std::runtime_error("State_OmniXtreme: motion file not found: " + path.string());
@@ -520,6 +599,7 @@ void State_OmniXtreme::enter()
     reset_tracking_state(true);
     calibrate_yaw_alignment();
     execute_motion_ = false;
+    warmup_models();
     spdlog::info("State_OmniXtreme: current trajectory {} ({}/{}) [paused]",
                  trajectories_[trajectory_index_].name, trajectory_index_ + 1, trajectories_.size());
 
@@ -528,19 +608,31 @@ void State_OmniXtreme::enter()
         using clock = std::chrono::high_resolution_clock;
         const auto dt = std::chrono::duration_cast<clock::duration>(std::chrono::duration<double>(env_->step_dt));
         auto sleep_till = clock::now() + dt;
+        double fk_time_ms_sum = 0.0;
+        double base_time_ms_sum = 0.0;
+        double residual_time_ms_sum = 0.0;
+        double step_time_ms_sum = 0.0;
+        std::size_t timing_count = 0;
 
         while (policy_thread_running_)
         {
+            const auto step_t0 = clock::now();
             env_->robot->update();
 
             const auto& traj = trajectories_[trajectory_index_];
             const std::size_t obs_frame_index = execute_motion_ ? frame_index_ : paused_frame_index();
+            const auto fk_t0 = clock::now();
             auto command_obs = build_command_obs(traj, obs_frame_index);
+            const auto fk_t1 = clock::now();
             auto real_obs = build_real_obs({});
             auto history_obs = build_history_obs(real_obs);
+            const auto base_t0 = clock::now();
             auto base_action = infer_base_action(real_obs, command_obs, history_obs);
+            const auto base_t1 = clock::now();
             auto residual_obs = build_residual_obs(real_obs, command_obs, base_action);
+            const auto residual_t0 = clock::now();
             auto residual_action = infer_residual_action(residual_obs);
+            const auto residual_t1 = clock::now();
 
             std::vector<float> final_action(dof_, 0.0f);
             for (std::size_t i = 0; i < dof_; ++i)
@@ -574,9 +666,25 @@ void State_OmniXtreme::enter()
             }
             {
                 std::lock_guard<std::mutex> lock(target_mtx_);
+                for (std::size_t i = 0; i < dof_; ++i)
+                {
+                    const bool is_waist = (i >= 12 && i <= 14);
+                    const float q_alpha = is_waist ? waist_q_target_lpf_alpha_ : q_target_lpf_alpha_;
+                    const float tau_alpha = is_waist ? waist_tau_ff_lpf_alpha_ : tau_ff_lpf_alpha_;
+                    q_target[i] =
+                        (1.0f - q_alpha) * latest_q_target_[i] + q_alpha * q_target[i];
+                    tau_ff[i] =
+                        (1.0f - tau_alpha) * latest_tau_ff_[i] + tau_alpha * tau_ff[i];
+                }
                 latest_q_target_ = std::move(q_target);
                 latest_tau_ff_ = std::move(tau_ff);
             }
+
+            fk_time_ms_sum += std::chrono::duration<double, std::milli>(fk_t1 - fk_t0).count();
+            base_time_ms_sum += std::chrono::duration<double, std::milli>(base_t1 - base_t0).count();
+            residual_time_ms_sum += std::chrono::duration<double, std::milli>(residual_t1 - residual_t0).count();
+            step_time_ms_sum += std::chrono::duration<double, std::milli>(clock::now() - step_t0).count();
+            ++timing_count;
 
             last_action_ = final_action;
             last_base_action_ = base_action;
@@ -586,10 +694,96 @@ void State_OmniXtreme::enter()
                 ++total_steps_;
             }
 
+            if (timing_count % 200 == 0)
+            {
+                spdlog::info(
+                    "State_OmniXtreme step={} traj={} running={} avg_fk_ms={:.3f} avg_base_ms={:.3f} avg_res_ms={:.3f} avg_step_ms={:.3f}",
+                    total_steps_,
+                    trajectories_[trajectory_index_].name,
+                    execute_motion_.load(),
+                    fk_time_ms_sum / static_cast<double>(timing_count),
+                    base_time_ms_sum / static_cast<double>(timing_count),
+                    residual_time_ms_sum / static_cast<double>(timing_count),
+                    step_time_ms_sum / static_cast<double>(timing_count));
+                fk_time_ms_sum = 0.0;
+                base_time_ms_sum = 0.0;
+                residual_time_ms_sum = 0.0;
+                step_time_ms_sum = 0.0;
+                timing_count = 0;
+            }
+
             std::this_thread::sleep_until(sleep_till);
             sleep_till += dt;
         }
     });
+}
+
+void State_OmniXtreme::warmup_models()
+{
+    using clock = std::chrono::steady_clock;
+
+    if (trajectories_.empty())
+    {
+        return;
+    }
+
+    const auto& traj = trajectories_[trajectory_index_];
+    const std::size_t warmup_frame = paused_frame_index();
+    constexpr int kWarmupIters = 4;
+
+    spdlog::info("State_OmniXtreme: warmup start iterations={}", kWarmupIters);
+    const auto warmup_t0 = clock::now();
+
+    double fk_ms_sum = 0.0;
+    double base_ms_sum = 0.0;
+    double residual_ms_sum = 0.0;
+
+    for (int i = 0; i < kWarmupIters; ++i)
+    {
+        env_->robot->update();
+
+        const auto fk_t0 = clock::now();
+        auto command_obs = build_command_obs(traj, warmup_frame);
+        const auto fk_t1 = clock::now();
+
+        auto real_obs = build_real_obs({});
+        auto history_obs = build_history_obs(real_obs);
+
+        const auto base_t0 = clock::now();
+        auto base_action = infer_base_action(real_obs, command_obs, history_obs);
+        const auto base_t1 = clock::now();
+
+        auto residual_obs = build_residual_obs(real_obs, command_obs, base_action);
+        const auto residual_t0 = clock::now();
+        auto residual_action = infer_residual_action(residual_obs);
+        const auto residual_t1 = clock::now();
+
+        std::vector<float> final_action(dof_, 0.0f);
+        for (std::size_t j = 0; j < dof_; ++j)
+        {
+            final_action[j] = base_action[j] + residual_scale_ * residual_action[j];
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(target_mtx_);
+            latest_q_target_ = compute_q_target(final_action);
+            latest_tau_ff_.assign(dof_, 0.0f);
+        }
+        last_action_ = std::move(final_action);
+        last_base_action_ = std::move(base_action);
+
+        fk_ms_sum += std::chrono::duration<double, std::milli>(fk_t1 - fk_t0).count();
+        base_ms_sum += std::chrono::duration<double, std::milli>(base_t1 - base_t0).count();
+        residual_ms_sum += std::chrono::duration<double, std::milli>(residual_t1 - residual_t0).count();
+    }
+
+    const auto warmup_t1 = clock::now();
+    spdlog::info(
+        "State_OmniXtreme: warmup done total_s={:.3f} avg_fk_ms={:.3f} avg_base_ms={:.3f} avg_res_ms={:.3f}",
+        std::chrono::duration<double>(warmup_t1 - warmup_t0).count(),
+        fk_ms_sum / static_cast<double>(kWarmupIters),
+        base_ms_sum / static_cast<double>(kWarmupIters),
+        residual_ms_sum / static_cast<double>(kWarmupIters));
 }
 
 void State_OmniXtreme::run()

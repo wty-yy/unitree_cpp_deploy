@@ -10,6 +10,7 @@
 #include <atomic>
 #include <chrono>
 #include <deque>
+#include <filesystem>
 #include <functional>
 #include <random>
 #include <mutex>
@@ -52,6 +53,7 @@ private:
     void load_key_config(const YAML::Node& cfg);
     void initialize_limits(const YAML::Node& cfg);
     void calibrate_yaw_alignment();
+    void warmup_models();
 
     std::vector<float> build_real_obs(const std::vector<float>& motion_command) const;
     std::vector<float> build_command_obs(const MotionTrajectory& traj, std::size_t frame_index);
@@ -75,6 +77,7 @@ private:
     static std::vector<float> to_float_vector(const cnpy::NpyArray& array);
 
 private:
+    std::filesystem::path policy_dir_;
     YAML::Node deploy_cfg_;
     std::unique_ptr<isaaclab::ManagerBasedRLEnv> env_;
 
@@ -131,6 +134,10 @@ private:
 
     float action_clip_{1.0f};
     float residual_scale_{1.0f};
+    float q_target_lpf_alpha_{0.8f};
+    float tau_ff_lpf_alpha_{0.8f};
+    float waist_q_target_lpf_alpha_{0.8f};
+    float waist_tau_ff_lpf_alpha_{0.5f};
     bool loop_trajectory_{true};
     std::size_t total_steps_{0};
 

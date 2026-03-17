@@ -109,18 +109,23 @@ FSM:
     fk_model: exported/fk_trt.onnx
     # motions_dir: exported/motions  # Optional, load from motion_files if specified
     motion_files:
-      - exported/motions/4.npz
-      - exported/motions/5.npz
-      - exported/motions/9.npz
-      - exported/motions/10.npz
-      - exported/motions/11.npz
-      - exported/motions/13.npz
+      - exported/motions/4.npz  # 回旋踢
+      - exported/motions/5.npz  # 前滚
+      # - exported/motions/7.npz  # 张手
+      - exported/motions/9.npz  # 后空翻
+      - exported/motions/10.npz  # 侧回旋踢
+      - exported/motions/11.npz  # 前空翻
+      - exported/motions/13.npz  # 低姿态踢腿
       # - exported/motions/motion.npz
     onnx_tensorrt: false
     onnx_cuda: true
     onnx_cuda_device: 0
     action_clip: 1.0
     residual_scale: 1.0
+    q_target_lpf_alpha: 0.8
+    tau_ff_lpf_alpha: 0.5
+    waist_q_target_lpf_alpha: 0.7
+    waist_tau_ff_lpf_alpha: 0.5
     loop_trajectory: true
     root_body_index: 0
     # body_quat_w 中用于构造 anchor_ori_6d 的 body 索引；当前与 deploy_mujoco.py 的 bm_anchor_id=9 对齐
