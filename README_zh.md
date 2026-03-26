@@ -98,12 +98,12 @@ sudo ./go2_ctrl [选项]
 1. 启动程序后，控制台将显示 "Waiting for connection to robot..."
 2. 确保机器人上电并连接正常，程序连接成功后会显示 "Connected to robot."
 3. **进入站立模式**：按下手柄上的 **[L2 + A]** 组合键，机器人将进入 `FixStand` 模式并站立
-4. **开始 RL 控制**：按下手柄上的 **[Start + Up/Down/Left/Right]** 键，机器人将切换到相应的 `policy_dir_[up,down,left,right]` 控制模型，开始执行 RL 策略
+4. **开始 RL 控制**：按下手柄上的 **[Start + Up/Down/Left/Right]** 键，机器人将切换到相应的 `Velocity_[UP/DOWN/LEFT/RIGHT].policy_dir` 控制模型，开始执行 RL 策略（默认配置了Up/Down/Left策略）
 5. **模型切换**：在运行过程中，可以随时通过按下 **[Start + 方向键]** 切换到不同的 RL 模型
 6. **固定指令执行**：按下手柄上的 **[L2 + Y]** 组合键，机器人将开始执行预设的固定指令（如配置文件中所设），再次按下该组合键将停止固定指令执行
 7. **进入阻尼模式**：按下手柄上的 **[L2 + B]** 组合键，机器人将进入阻尼模式，停止 RL 控制
 
-https://github.com/user-attachments/assets/56375e44-5ac1-42b0-a268-7837c2857287
+https://github.com/user-attachments/assets/c39c05c2-92e6-473d-9da7-548f57159edb
 
 ## 配置说明
 
@@ -114,15 +114,12 @@ https://github.com/user-attachments/assets/56375e44-5ac1-42b0-a268-7837c2857287
 
 ### 更换策略模型
 
-要更换使用的 RL 策略，请修改 `config.yaml` 中的 `Velocity.policy_dir` 字段
+要更换使用的 RL 策略，请修改 `config.yaml` 中的 `Velocity_[UP/DOWN/LEFT/RIGHT].policy_dir` 字段
 
 ```yaml
-Velocity:
+Velocity_Up:
   # 策略模型路径 (相对于项目根目录或绝对路径)
-  policy_dir_up: ../../../logs/rsl_rl/go2_moe_cts_expert_goal_137000_0.6745  # best model
-  policy_dir_down: ../../../logs/rsl_rl/go2_moe_cts_fast_flat_v4_fz_54k  # fast model
-  policy_dir_left: ../../../logs/rsl_rl/kaiwu2025_v6-2_124004  # not bad model
-  policy_dir_right: null
+  policy_dir: ../../../logs/go2/go2_moe_cts_self_103.5k_0.6669
 ```
 
 指定的目录结构应包含：

@@ -41,7 +41,7 @@ FSM:
       Passive: LT + B.on_pressed
       Velocity_Down: start + down
       Velocity_Left: start + left
-    policy_dir: ../../../logs/go2/go2_moe_cts_137k_0.6739  # best model
+    policy_dir: ../../../logs/go2/go2_moe_cts_137k_0.6713
     logging: false
     logging_dt: 0.01
     fixed_command:
@@ -63,6 +63,6 @@ FSM:
       Passive: LT + B.on_pressed
       Velocity_Up: start + up
       Velocity_Down: start + down
-    policy_dir: ../../../logs/go2/kaiwu2025_v6-2_124004  # not bad model
+    policy_dir: ../../../logs/go2/go2_moe_cts_self_103.5k_0.6669
     logging: false
     logging_dt: 0.01
