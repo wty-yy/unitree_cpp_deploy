@@ -126,6 +126,11 @@ Velocity_Up:
 - `exported/policy.onnx`: 导出的 ONNX 策略模型。
 - `params/deploy.yaml`: 对应的部署参数。
 
+### 默认策略
+- Velocity_Up `Start + Up`: 全地形策略，最大速度2m/s，越障能力较强
+- Velocity_Down `Start + Down`: 纯平地跑步策略，最大速度4.5m/s，短跑道动捕测速4.07m/s
+- Velocity_Left `Start + Left`: 全地形策略，最大速度2m/s，相比Up模型有更少的绊脚
+
 ### 修改控制参数
 
 你也可以在 `config.yaml` 中调整 `FixStand` 模式下的 PD 参数 (`kp`, `kd`) 以及目标关节角度 (`qs`)。

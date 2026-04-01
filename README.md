@@ -126,6 +126,12 @@ The specified directory structure should contain:
 - `exported/policy.onnx`: Exported ONNX policy model.
 - `params/deploy.yaml`: Corresponding deployment parameters.
 
+### Default Policies
+
+- Velocity_Up `Start + Up`: All-terrain policy. Maximum speed of 2m/s with strong obstacle-clearing capabilities.
+- Velocity_Down `Start + Down`: Flat-ground running policy. Maximum speed of 4.5m/s; achieved 4.07m/s in motion capture sprints on short tracks.
+- Velocity_Left `Start + Left`: All-terrain policy. Maximum speed of 2m/s with reduced foot-stumbling compared to the Up model.
+
 ### Modifying Control Parameters
 
 You can also adjust PD parameters (`kp`, `kd`) and target joint angles (`qs`) for `FixStand` mode in `config.yaml`.

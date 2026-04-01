@@ -13,9 +13,9 @@ FSM:
     Velocity_Left:
       id: 6
       type: RLBase
-    # Velocity_Right:
-    #   id: 7
-    #   type: RLBase
+    Velocity_Right:
+      id: 7
+      type: RLBase
 
   Passive:
     transitions: 
@@ -28,6 +28,7 @@ FSM:
       Velocity_Up: start + up
       Velocity_Down: start + down
       Velocity_Left: start + left
+      Velocity_Right: start + right
     kp: [60, 80, 80, 60, 80, 80, 60, 80, 80, 60, 80, 80]
     kd: [5, 4, 4, 5, 4, 4, 5, 4, 4, 5, 4, 4]
     ts: [0, 1, 2]
@@ -41,6 +42,7 @@ FSM:
       Passive: LT + B.on_pressed
       Velocity_Down: start + down
       Velocity_Left: start + left
+      Velocity_Right: start + right
     policy_dir: ../../../logs/go2/go2_moe_cts_137k_0.6713
     logging: false
     logging_dt: 0.01
@@ -55,7 +57,8 @@ FSM:
       Passive: LT + B.on_pressed
       Velocity_Up: start + up
       Velocity_Left: start + left
-    policy_dir: ../../../logs/go2/go2_moe_cts_fast_flat_v4_fz_54k  # fast model
+      Velocity_Right: start + right
+    policy_dir: ../../../logs/go2/go2_moe_cts_flat_max4.5_71k  # fast model
     logging: false
     logging_dt: 0.01
   Velocity_Left:
@@ -63,6 +66,16 @@ FSM:
       Passive: LT + B.on_pressed
       Velocity_Up: start + up
       Velocity_Down: start + down
+      Velocity_Right: start + right
     policy_dir: ../../../logs/go2/go2_moe_cts_self_103.5k_0.6669
+    logging: false
+    logging_dt: 0.01
+  Velocity_Right:
+    transitions: 
+      Passive: LT + B.on_pressed
+      Velocity_Up: start + up
+      Velocity_Down: start + down
+      Velocity_Left: start + left
+    policy_dir: null
     logging: false
     logging_dt: 0.01
