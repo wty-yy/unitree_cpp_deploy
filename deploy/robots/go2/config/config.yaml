@@ -67,7 +67,7 @@ FSM:
       Velocity_Up: start + up
       Velocity_Down: start + down
       Velocity_Right: start + right
-    policy_dir: ../../../logs/go2/go2_moe_cts_self_103.5k_0.6669
+    policy_dir: ../../../logs/go2/go2_moe_cts_164k_0.6715
     logging: false
     logging_dt: 0.01
   Velocity_Right:
