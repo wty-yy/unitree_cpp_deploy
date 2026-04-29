@@ -1,4 +1,8 @@
 # UPDATE
+## 20260429 v0.6.3
+**新增BeyondMimic***
+1. 默认是一个自己用kimodo生成的dailylife_back_2_3向后走的模型+轨迹，使用方法参考[config.yaml](deploy/robots/g1/config/config.yaml)中的BeyondMimic配置，通过`RT + A.on_pressed`切换到该模型
+
 ## 20260331 v0.6.2
 **新增Go2 go2_moe_cts_flat_max4.5_71k模型**
 1. 通过Start+Down切换到该模型，删掉原先的模型，新模型也是开启自碰撞后训练，移动时双脚不容易打到对方
