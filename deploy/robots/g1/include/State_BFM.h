@@ -113,6 +113,7 @@ private:
     bool use_policy_action_{false};
     bool start_motion_{false};
     std::size_t total_steps_{0};
+    bool verbose_runtime_log_{false};
 
     float action_rescale_{5.0f};
     std::vector<float> action_scale_;

@@ -134,6 +134,7 @@ State_BFM::State_BFM(int state_mode, std::string state_string)
     initialize_limits(cfg);
     load_task_context(cfg);
     load_key_config(cfg);
+    verbose_runtime_log_ = cfg["verbose_runtime_log"] ? cfg["verbose_runtime_log"].as<bool>() : false;
 
 }
 
@@ -637,7 +638,7 @@ void State_BFM::enter()
             }
 
             ++total_steps_;
-            if (total_steps_ % 200 == 0)
+            if (verbose_runtime_log_ && total_steps_ % 200 == 0)
             {
                 const double avg_infer_ms = (infer_time_count > 0) ? (infer_time_ms_sum / static_cast<double>(infer_time_count)) : 0.0;
                 spdlog::info("State_BFM step={} latent={}/{} avg_infer_ms={:.3f}",

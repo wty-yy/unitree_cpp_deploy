@@ -1,9 +1,12 @@
 #pragma once
 
 #include "FSM/FSMState.h"
+#include "FSM/OverlayState_Mimic.h"
 #include "isaaclab/envs/manager_based_rl_env.h"
+#include "utils/path_file_manager.h"
 #include <array>
 #include <atomic>
+#include <filesystem>
 #include <thread>
 
 class State_Mimic : public FSMState
@@ -21,9 +24,13 @@ public:
 
 private:
     void reset_motion_state();
+    void load_motion(const std::filesystem::path& motion_file, bool emit_log = true);
+    void start_policy_thread();
+    void stop_policy_thread();
 
     std::unique_ptr<isaaclab::ManagerBasedRLEnv> env_;
     std::shared_ptr<MotionLoader_> motion_;
+    std::filesystem::path bootstrap_motion_file_;
 
     std::thread policy_thread_;
     std::atomic<bool> policy_thread_running_{false};
@@ -33,6 +40,11 @@ private:
     std::array<float, 2> time_range_{};
     std::atomic<float> reference_time_{0.0f};
     int finished_state_id_{0};
+    float motion_fps_{30.0f};
+    bool has_time_start_{false};
+    bool has_time_end_{false};
+    float configured_time_start_{0.0f};
+    float configured_time_end_{0.0f};
 };
 
 class State_Mimic::MotionLoader_

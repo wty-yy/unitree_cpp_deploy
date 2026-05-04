@@ -17,6 +17,17 @@ FSM:
       id: 6
       type: Mimic
 
+  overlay:
+    OverlayBeyondMimic:
+      target_state: BeyondMimic
+      open: RT + A.on_pressed
+      select_next: down.on_pressed
+      select_prev: up.on_pressed
+      confirm: A.on_pressed
+      cancel: B.on_pressed
+      motion_files:
+        - ../../../logs/g1/beyondmimic/dailylife_7.3w_20260504/motions
+
   Passive:
     transitions: 
       FixStand: LT + up.on_pressed
@@ -40,7 +51,6 @@ FSM:
       Velocity_Y: RB + Y.on_pressed
       BFM_goal: RT + Y.on_pressed
       OmniXtreme: RT + X.on_pressed
-      BeyondMimic: RT + A.on_pressed
     kp: [
       100., 100., 100., 150., 40., 40.,
       100., 100., 100., 150., 40., 40.,
@@ -70,7 +80,6 @@ FSM:
       Passive: LT + B.on_pressed
       BFM_goal: RT + Y.on_pressed
       OmniXtreme: RT + X.on_pressed
-      BeyondMimic: RT + A.on_pressed
     policy_dir: ../../../logs/g1/velocity/g1_moe_cts_v0.0.5.1
 
   BFM_goal:
@@ -78,8 +87,8 @@ FSM:
       Passive: LT + B.on_pressed
       Velocity_Y: RB + Y.on_pressed
       OmniXtreme: RT + X.on_pressed
-      BeyondMimic: RT + A.on_pressed
     policy_dir: ../../../logs/g1/bfm/official
+    verbose_runtime_log: false
     deploy_yaml: param/deploy.yaml
     onnx_model: exported/FBcprAuxModel.onnx
     onnx_tensorrt: false
@@ -98,10 +107,10 @@ FSM:
       reset_state: X.on_pressed
     goal:
       selected_goals: [
-        fallAndGetUp1_subject4_2193,
-        dance1_subject3_505,
+        # fallAndGetUp1_subject4_2193,
+        # dance1_subject3_505,
         fight1_subject3_5559, 
-        fallAndGetUp1_subject4_2193,
+        # fallAndGetUp1_subject4_2193,
       ]
 
   OmniXtreme:
@@ -109,7 +118,6 @@ FSM:
       Passive: LT + B.on_pressed
       Velocity_Y: RB + Y.on_pressed
       BFM_goal: RT + Y.on_pressed
-      BeyondMimic: RT + A.on_pressed
     policy_dir: ../../../logs/g1/omnixtreme/official
     deploy_yaml: params/deploy.yaml
     base_model: exported/base_policy_trt.onnx
@@ -151,10 +159,11 @@ FSM:
       BFM_goal: RT + Y.on_pressed
       OmniXtreme: RT + X.on_pressed
     fps: 30  # Motion file fps
-    motion_file: ../../../logs/g1/beyondmimic/dailylife_back_2_3/param/dailylife_back_2_3.csv
-    policy_dir: ../../../logs/g1/beyondmimic/dailylife_back_2_3/
+    motion_files:
+      - ../../../logs/g1/beyondmimic/dailylife_7.3w_20260504/motions
+    policy_dir: ../../../logs/g1/beyondmimic/dailylife_7.3w_20260504
     deploy_yaml: param/deploy.yaml
     onnx_model: exported/policy.onnx
     time_start: null   # Start time [sec], null from the beginning
     time_end: null    # End time [sec], null until the end
-    finished_transition: Velocity_Y
+    finished_transition: BFM_goal

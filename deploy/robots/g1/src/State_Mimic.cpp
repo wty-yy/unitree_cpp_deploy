@@ -126,24 +126,32 @@ State_Mimic::State_Mimic(int state_mode, std::string state_string)
 
     auto articulation = std::make_shared<unitree::BaseArticulation<LowState_t::SharedPtr>>(FSMState::lowstate);
 
-    std::filesystem::path motion_file = cfg["motion_file"].as<std::string>();
-    if (!motion_file.is_absolute())
+    motion_fps_ = cfg["fps"] ? cfg["fps"].as<float>() : 30.0f;
+    if (motion_fps_ <= 0.0f)
     {
-        motion_file = param::proj_dir / motion_file;
+        throw std::runtime_error("State_Mimic: fps must be > 0");
     }
 
-    motion_ = std::make_shared<MotionLoader_>(motion_file.string(), cfg["fps"].as<float>());
-    spdlog::info("State_Mimic: loaded motion '{}' with duration {:.2f}s",
-                 motion_file.stem().string(), motion_->duration);
-    motion = motion_;
+    has_time_start_ = cfg["time_start"] && !cfg["time_start"].IsNull();
+    has_time_end_ = cfg["time_end"] && !cfg["time_end"].IsNull();
+    configured_time_start_ = has_time_start_ ? cfg["time_start"].as<float>() : 0.0f;
+    configured_time_end_ = has_time_end_ ? cfg["time_end"].as<float>() : 0.0f;
 
-    time_range_[0] = cfg["time_start"] && !cfg["time_start"].IsNull()
-        ? std::clamp(cfg["time_start"].as<float>(), 0.0f, motion_->duration)
-        : 0.0f;
-    time_range_[1] = cfg["time_end"] && !cfg["time_end"].IsNull()
-        ? std::clamp(cfg["time_end"].as<float>(), 0.0f, motion_->duration)
-        : motion_->duration;
-    reference_time_.store(time_range_[0]);
+    std::vector<std::filesystem::path> configured_paths;
+    if (cfg["motion_files"] && cfg["motion_files"].IsSequence())
+    {
+        for (const auto& n : cfg["motion_files"])
+        {
+            configured_paths.emplace_back(n.as<std::string>());
+        }
+    }
+    const auto bootstrap_files = PathFileManager::collect_csv_files(configured_paths, param::proj_dir);
+    if (bootstrap_files.empty())
+    {
+        throw std::runtime_error("State_Mimic: no csv found in 'motion_files' for bootstrap initialization");
+    }
+    bootstrap_motion_file_ = bootstrap_files.front();
+    load_motion(bootstrap_motion_file_, true);
 
     env_ = std::make_unique<isaaclab::ManagerBasedRLEnv>(
         YAML::LoadFile((policy_dir / deploy_rel).string()),
@@ -166,12 +174,12 @@ State_Mimic::State_Mimic(int state_mode, std::string state_string)
             finished_state_id_
         )
     );
-    this->registered_checks.emplace_back(
-        std::make_pair(
-            [&]() -> bool { return isaaclab::mdp::bad_orientation(env_.get(), 1.0f); },
-            FSMStringMap.right.at("Passive")
-        )
-    );
+    // this->registered_checks.emplace_back(
+    //     std::make_pair(
+    //         [&]() -> bool { return isaaclab::mdp::bad_orientation(env_.get(), 1.0f); },
+    //         FSMStringMap.right.at("Passive")
+    //     )
+    // );
 }
 
 void State_Mimic::enter()
@@ -190,9 +198,90 @@ void State_Mimic::enter()
         lowcmd->msg_.motor_cmd()[i].tau() = 0.0f;
     }
 
-    motion = motion_;
+    if (!OverlayState_Mimic::has_confirmed_motion())
+    {
+        throw std::runtime_error("State_Mimic::enter: no confirmed motion from overlay");
+    }
+
+    load_motion(OverlayState_Mimic::confirmed_motion_file(), true);
+
+    motion_finished_.store(false);
+    reference_time_.store(time_range_[0]);
+
     env_->robot->update();
     reset_motion_state();
+    start_policy_thread();
+}
+
+void State_Mimic::run()
+{
+    if (!env_)
+    {
+        return;
+    }
+
+    auto action = env_->action_manager->processed_actions();
+    for (int i = 0; i < env_->robot->data.joint_ids_map.size(); ++i)
+    {
+        lowcmd->msg_.motor_cmd()[env_->robot->data.joint_ids_map[i]].q() = action[i];
+    }
+}
+
+void State_Mimic::exit()
+{
+    stop_policy_thread();
+}
+
+void State_Mimic::reset_motion_state()
+{
+    execute_motion_ = true;
+    reference_time_.store(time_range_[0]);
+    motion_finished_.store(false);
+
+    auto ref_yaw = isaaclab::yawQuaternion(motion_->root_quaternion()).toRotationMatrix();
+    auto robot_yaw = isaaclab::yawQuaternion(torso_quat_w(env_.get())).toRotationMatrix();
+    init_quat = robot_yaw * ref_yaw.transpose();
+    motion_->reset(env_->robot->data, time_range_[0]);
+    env_->reset();
+}
+
+void State_Mimic::load_motion(const std::filesystem::path& motion_file, bool emit_log)
+{
+    std::filesystem::path resolved = motion_file;
+    if (!resolved.is_absolute())
+    {
+        resolved = (param::proj_dir / resolved).lexically_normal();
+    }
+
+    motion_ = std::make_shared<MotionLoader_>(resolved.string(), motion_fps_);
+    motion = motion_;
+
+    time_range_[0] = has_time_start_
+        ? std::clamp(configured_time_start_, 0.0f, motion_->duration)
+        : 0.0f;
+    time_range_[1] = has_time_end_
+        ? std::clamp(configured_time_end_, 0.0f, motion_->duration)
+        : motion_->duration;
+    if (time_range_[1] < time_range_[0])
+    {
+        std::swap(time_range_[0], time_range_[1]);
+    }
+    reference_time_.store(time_range_[0]);
+
+    if (emit_log)
+    {
+        spdlog::info("State_Mimic: loaded motion '{}' duration {:.2f}s",
+                     resolved.stem().string(),
+                     motion_->duration);
+    }
+}
+
+void State_Mimic::start_policy_thread()
+{
+    if (policy_thread_running_.load())
+    {
+        return;
+    }
 
     policy_thread_running_ = true;
     policy_thread_ = std::thread([this] {
@@ -228,40 +317,13 @@ void State_Mimic::enter()
     });
 }
 
-void State_Mimic::run()
-{
-    if (!env_)
-    {
-        return;
-    }
-
-    auto action = env_->action_manager->processed_actions();
-    for (int i = 0; i < env_->robot->data.joint_ids_map.size(); ++i)
-    {
-        lowcmd->msg_.motor_cmd()[env_->robot->data.joint_ids_map[i]].q() = action[i];
-    }
-}
-
-void State_Mimic::exit()
+void State_Mimic::stop_policy_thread()
 {
     policy_thread_running_ = false;
     if (policy_thread_.joinable())
     {
         policy_thread_.join();
     }
-}
-
-void State_Mimic::reset_motion_state()
-{
-    execute_motion_ = true;
-    reference_time_.store(time_range_[0]);
-    motion_finished_.store(false);
-
-    auto ref_yaw = isaaclab::yawQuaternion(motion_->root_quaternion()).toRotationMatrix();
-    auto robot_yaw = isaaclab::yawQuaternion(torso_quat_w(env_.get())).toRotationMatrix();
-    init_quat = robot_yaw * ref_yaw.transpose();
-    motion_->reset(env_->robot->data, time_range_[0]);
-    env_->reset();
 }
 
 State_Mimic::MotionLoader_::MotionLoader_(std::string motion_file, float fps)
