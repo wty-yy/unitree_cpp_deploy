@@ -94,6 +94,16 @@ FSM:
       BFM_goal: RT + Y.on_pressed
       OmniXtreme: RT + X.on_pressed
     policy_dir: ../../../logs/g1/velocity/g1_xjy/g1_mujoco_playgroumd_20260522
+    logging: true
+    logging_dt: 0.02
+    logging_options:
+      obs_terms: true
+      obs: true
+      action_raw: true
+      action_q_des: true
+      robot_state: true
+      commands: true
+      inference_outputs: true
 
   BFM_goal:
     transitions: 

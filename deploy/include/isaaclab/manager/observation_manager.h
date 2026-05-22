@@ -26,6 +26,12 @@ inline ObsMap& observations_map() {
     } name##_registrar_instance; \
     inline std::vector<float> name(ManagerBasedRLEnv* env, YAML::Node params)
 
+struct ObservationTermSnapshot
+{
+    std::string group_name;
+    std::string term_name;
+    std::vector<float> values;
+};
 
 class ObservationManager
 {
@@ -50,12 +56,34 @@ public:
     std::unordered_map<std::string, std::vector<float>> compute()
     {
         std::unordered_map<std::string, std::vector<float>> obs_map;
-        for(const auto & group : group_obs_term_cfgs_)
+        last_group_observations_.clear();
+        last_term_observations_.clear();
+
+        for (const auto& group_name : group_names_)
         {
-            const auto group_obs = compute_group(group.first);
-            obs_map[group.first] = group_obs;
+            const auto group_obs = compute_group(group_name);
+            obs_map[group_name] = group_obs;
+            last_group_observations_.emplace_back(group_name, group_obs);
+
+            const auto& group_terms = group_obs_term_cfgs_.at(group_name);
+            const auto& term_names = group_term_names_.at(group_name);
+            for (std::size_t idx = 0; idx < group_terms.size(); ++idx)
+            {
+                last_term_observations_.push_back(
+                    ObservationTermSnapshot{group_name, term_names[idx], group_terms[idx].get()});
+            }
         }
         return obs_map;
+    }
+
+    const std::vector<std::pair<std::string, std::vector<float>>>& last_group_observations() const
+    {
+        return last_group_observations_;
+    }
+
+    const std::vector<ObservationTermSnapshot>& last_term_observations() const
+    {
+        return last_term_observations_;
     }
 
     const std::vector<float> compute_group(const std::string& group_name)
@@ -108,18 +136,26 @@ protected:
         }
 
         if(only_one_input) {
-            group_obs_term_cfgs_["obs"] = _prepare_group_terms(this->cfg); // default group name
+            std::vector<std::string> term_names;
+            group_names_.push_back("obs");
+            group_obs_term_cfgs_["obs"] = _prepare_group_terms(this->cfg, &term_names); // default group name
+            group_term_names_["obs"] = std::move(term_names);
         } else {
             for(auto group = this->cfg.begin(); group != this->cfg.end(); ++group)
             {
                 auto group_name = group->first.as<std::string>();
                 if(group_name == "use_gym_history" || group_name == "scale_first") continue;
-                group_obs_term_cfgs_[group_name] = _prepare_group_terms(group->second);
+                std::vector<std::string> term_names;
+                group_names_.push_back(group_name);
+                group_obs_term_cfgs_[group_name] = _prepare_group_terms(group->second, &term_names);
+                group_term_names_[group_name] = std::move(term_names);
             }
         }
     }
 
-    std::vector<ObservationTermCfg> _prepare_group_terms(const YAML::Node & group_cfg)
+    std::vector<ObservationTermCfg> _prepare_group_terms(
+        const YAML::Node& group_cfg,
+        std::vector<std::string>* term_names = nullptr)
     {
         std::vector<ObservationTermCfg> terms;
         bool scale_first = false; // isaaclab default: clip first
@@ -159,6 +195,10 @@ protected:
             term_cfg.reset(obs);
 
             terms.push_back(term_cfg);
+            if (term_names)
+            {
+                term_names->push_back(term_name);
+            }
         }
         return terms;
     }
@@ -171,6 +211,10 @@ protected:
 
 private:
     std::unordered_map<std::string, std::vector<ObservationTermCfg>> group_obs_term_cfgs_;
+    std::vector<std::string> group_names_;
+    std::unordered_map<std::string, std::vector<std::string>> group_term_names_;
+    std::vector<std::pair<std::string, std::vector<float>>> last_group_observations_;
+    std::vector<ObservationTermSnapshot> last_term_observations_;
 };
 
 };

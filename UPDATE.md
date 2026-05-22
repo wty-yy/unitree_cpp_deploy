@@ -1,6 +1,7 @@
 # UPDATE
 ## 20260522 v0.6.4
 1. 新增filter类，支持LPF, Kalman滤波两种，可在配置文件中直接对Velocity, BFM, Omnixtreme配置
+2. g1的Velocity中新增logger记录
 
 ## 20260429 v0.6.3
 **新增BeyondMimic***

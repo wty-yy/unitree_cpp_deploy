@@ -12,6 +12,7 @@
 #include "isaaclab/algorithms/algorithms.h"
 #include <iostream>
 #include <map>
+#include <mutex>
 #include <string>
 
 namespace isaaclab
@@ -19,6 +20,15 @@ namespace isaaclab
 
 class ObservationManager;
 class ActionManager;
+
+struct PolicyLoggingSnapshot
+{
+    std::vector<std::pair<std::string, std::vector<float>>> observation_groups;
+    std::vector<ObservationTermSnapshot> observation_terms;
+    std::map<std::string, std::vector<float>> inference_results;
+    std::vector<float> raw_action;
+    std::vector<float> processed_action;
+};
 
 class ManagerBasedRLEnv
 {
@@ -91,17 +101,33 @@ public:
             throw std::runtime_error("ManagerBasedRLEnv::step requires observation_manager, action_manager and alg");
         }
         auto obs = observation_manager->compute();
-        
-        last_inference_results = alg->forward(obs);
-        
+        auto inference_results = alg->forward(obs);
+
         std::vector<float> action;
-        if (last_inference_results.count("actions")) {
-            action = last_inference_results["actions"];
-        } else if (!last_inference_results.empty()) {
-            action = last_inference_results.begin()->second;
+        if (inference_results.count("actions")) {
+            action = inference_results["actions"];
+        } else if (!inference_results.empty()) {
+            action = inference_results.begin()->second;
         }
-        
+
         action_manager->process_action(action);
+        const auto processed_action = action_manager->processed_actions();
+
+        {
+            std::lock_guard<std::mutex> lock(policy_snapshot_mutex_);
+            last_policy_snapshot_.observation_groups = observation_manager->last_group_observations();
+            last_policy_snapshot_.observation_terms = observation_manager->last_term_observations();
+            last_policy_snapshot_.inference_results = inference_results;
+            last_policy_snapshot_.raw_action = action;
+            last_policy_snapshot_.processed_action = processed_action;
+            last_inference_results = inference_results;
+        }
+    }
+
+    PolicyLoggingSnapshot get_policy_logging_snapshot() const
+    {
+        std::lock_guard<std::mutex> lock(policy_snapshot_mutex_);
+        return last_policy_snapshot_;
     }
 
     float step_dt;
@@ -125,6 +151,10 @@ public:
     float fixed_ang_vel_z = 0.0f;
     float fixed_command_duration = 0.0f;  // 0 means indefinite
     std::chrono::steady_clock::time_point fixed_command_start_time;
+
+private:
+    mutable std::mutex policy_snapshot_mutex_;
+    PolicyLoggingSnapshot last_policy_snapshot_;
 };
 
 };
