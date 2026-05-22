@@ -1,143 +1,244 @@
 <div align="center">
-  <h1 align="center">Go2 RL CPP Deploy</h1>
+  <h1 align="center">G1 RL CPP Deploy</h1>
   <p align="center">
-    <span>🌎 English</span> | <a href="README_zh.md">🇨🇳 中文</a>
+    <span>English</span> | <a href="README_zh.md">Chinese</a> | <a href="UPDATE.md">Changelog</a>
   </p>
 </div>
 
-This project deploys Reinforcement Learning (RL) policies on the Unitree Go2 Edu robot (equipped with Orin NX). The code is modified from [unitree_rl_lab](https://github.com/unitreerobotics/unitree_rl_lab) and supports deployment through Ethernet or the onboard computer.
+This project deploys reinforcement learning and motion imitation policies on the Unitree G1 humanoid robot. The current main entry is under `deploy/robots/g1/`. The codebase supports basic locomotion control, BFM-Zero, OmniXtreme, and BeyondMimic motion replay. The repository also still contains the Go2-related implementation under `deploy/robots/go2/`.
 
-## Directory Structure
+## Table of Contents
 
-```
-unitree_rl_lab/
-├── deploy/                 # Deployment related code
-│   ├── include/            # Common headers (FSM, Isaac Lab interfaces, etc.)
-│   ├── robots/go2/         # Main program, CMakeLists, and config for Go2 robot
-│   └── thirdparty/         # Third-party libraries (onnxruntime, json)
-├── logs/                   # Directory for trained RL policy models
+- [Code Structure](#code-structure)
+- [Dependencies](#dependencies)
+- [Weight Download](#weight-download)
+- [Build Steps](#build-steps)
+- [Running Guide](#running-guide)
+  - [Basic Usage](#basic-usage)
+  - [Operation Flow](#operation-flow)
+  - [Runtime Interaction](#runtime-interaction)
+- [Configuration](#configuration)
+  - [Base State Configuration](#base-state-configuration)
+  - [Changing Policy Models](#changing-policy-models)
+  - [BFM-Zero Configuration](#bfm-zero-configuration)
+  - [OmniXtreme Configuration](#omnixtreme-configuration)
+  - [Termination and Troubleshooting](#termination-and-troubleshooting)
+
+## Code Structure
+
+```bash
+unitree_cpp_deploy/
+├── deploy/                     # Deployment-related code
+│   ├── include/                # Common headers (FSM, Isaac Lab interfaces, etc.)
+│   ├── robots/g1/              # G1 main program, CMakeLists, and config
+│   ├── robots/go2/             # Go2-related implementation
+│   └── thirdparty/             # Third-party libraries (onnxruntime, cnpy, json)
+├── docs/                       # Supplementary documents
+├── logs/                       # Policy models and motion data
+├── UPDATE.md                   # Changelog
 └── README.md
 ```
 
 ## Dependencies
 
-Before compiling and running, ensure the following dependencies are installed in the development environment (Orin NX):
+The real-robot setup currently uses JetPack 6.2 and CUDA 12.6.68. For flashing notes, see [blog - G1 flashing notes](https://wty-yy.github.io/posts/30579/#g1%E5%88%B7%E6%9C%BA%E8%AE%B0%E5%BD%95).
+
+Before building and running, make sure the development environment has the following packages installed:
 
 ```bash
-sudo apt install libboost-program-options-dev libyaml-cpp-dev libeigen3-dev libfmt-dev libspdlog-dev
+sudo apt install libboost-program-options-dev libyaml-cpp-dev libeigen3-dev libfmt-dev libspdlog-dev zlib1g-dev
 ```
 
-- **[unitree_sdk2](https://github.com/unitreerobotics/unitree_sdk2)**: SDK for Unitree robot development.
-- **Boost**: For program options parsing (`program_options`).
-- **yaml-cpp**: For reading configuration files.
-- **Eigen3**: Matrix operation library.
-- **fmt**: Formatting library.
-- **spdlog**: Logging library.
+- **[unitree_sdk2](https://github.com/unitreerobotics/unitree_sdk2)**: Unitree robot development SDK, required for real-robot DDS communication.
 - **onnxruntime**:
-   - x64 Linux: Download [onnxruntime-linux-x64-1.23.2.tgz](https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz) and extract it to the `deploy/thirdparty/` folder.
-   - Orin NX: Download [onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2) and extract it to the `deploy/thirdparty/` folder. Modify the ONNX link path in [{ROBOT}/CMakeLists.txt](deploy/robots/go2/CMakeLists.txt) by uncommenting the corresponding lines.
+  - x64 Linux GPU: download [onnxruntime-linux-x64-gpu-1.24.2.tgz](https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-linux-x64-gpu-1.24.2.tgz) and extract it into `deploy/thirdparty/`
+  - Orin NX GPU: download [onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2) and extract it into `deploy/thirdparty/`
+  - Manual build:
+    ```bash
+    git clone --recursive https://github.com/microsoft/onnxruntime
+    cd onnxruntime
+    uv venv  # create a uv virtual environment with a recent CMake for building
+    uv pip install cmake
+    source ./venv/bin/activate
+    ./build.sh --config Release --parallel --build_shared_lib --use_cuda --cuda_home /usr/local/cuda --cudnn_home /usr/lib/aarch64-linux-gnu
+    # Headers are under include/onnxruntime/ and shared libraries are under build/Linux/Release/
+    ```
+  - After downloading or building, also check the include and link path comments in [deploy/robots/g1/CMakeLists.txt](deploy/robots/g1/CMakeLists.txt).
+- **cnpy**: Used to read `npy/npz` files. It is already vendored in the repository, so no extra system package is needed.
 
-> If you deploy on the Orin NX onboard computer, install the aarch64 version of onnxruntime. If you deploy from an x64 Linux computer through Ethernet, install the x64 version and adjust the ONNX link path accordingly.
+## Weight Download
 
-## Compilation Steps
+- `Velocity` basic locomotion weights are small and are available under `logs/g1/velocity/` by default
+- `BFM-Zero` weights are larger; download [official_bfm.tar.zst](https://drive.google.com/file/d/1cvdXCLbvyO22YmiV5_FiQPpcx9g3vnGM) into `logs/g1/bfm/` and extract it
+- `OmniXtreme` weights are larger; download [official_omnixtreme.tar.zst](https://drive.google.com/file/d/1ffYiU07X2I-bpAYFBqg3ekJ4VNndMIrL/view?usp=sharing) into `logs/g1/omnixtreme/` and extract it
 
-1. Enter the Go2 deployment directory:
+```bash
+cd logs/g1/bfm
+tar -xvf official_bfm.tar.zst
+```
+
+## Build Steps
+
+1. Enter the G1 deployment directory:
    ```bash
-   cd deploy/robots/go2
+   cd deploy/robots/g1
    ```
 
-2. Create a build directory:
+2. Run CMake and build:
    ```bash
-   mkdir build && cd build
-   ```
-
-3. Run CMake and compile:
-   ```bash
-   cmake .. && make -j8
+   cmake -B build
+   cmake --build build -j$(nproc)
    ```
 
 ## Running Guide
 
-After compilation, run the generated `go2_ctrl` executable in the `build` directory.
+After building, run the generated `g1_ctrl` executable under `deploy/robots/g1/`.
 
 ### Basic Usage
 
 #### Command Line Arguments
 
-- `-h, --help`: Show help message.
-- `-v, --version`: Show version information.
-- `--log`: Enable logging (logs will be saved in `deploy/robots/go2/log/`).
-- `-n, --network <interface>`: Specify the network interface name for DDS communication (e.g., `eth0`, `wlan0`). If not specified, the default interface will be used.
+- `-h, --help`: show help information
+- `-v, --version`: show version information
+- `--log`: enable logging and write output to `log/log.txt` under the project root
+- `-n, --network <interface>`: specify the DDS network interface, such as `lo` or `eth0`
 
-#### Real Robot Launch
-Start the Go2 robot. After it enters the standing state, press **[L2 + A]** twice to make the robot lie down. Connect with the mobile app, then go to Settings -> Service Status, disable `mcf/*` services, and close the official control program to avoid control conflicts.
+#### Launch Examples
+
+Loopback test on the local machine:
 
 ```bash
-sudo ./go2_ctrl [options]
+./build/g1_ctrl -n lo
 ```
 
-**Example:**
+Real robot example:
 
-Start on NX, assuming the lower-level network interface is `eth0`:
 ```bash
-./go2_ctrl -n eth0
+./build/g1_ctrl -n eth0
 ```
 
-#### Simulation Launch
-
-Any gamepad using the Xbox data protocol can control the robot. For other protocols, modify the joystick configuration file in `unitree_mujoco`.
-
-Download and compile the contents of `simulate/` in [unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco), and configure `simulate/config.yaml` with `domain_id: 0`, `use_joystick: 1`.
-```bash
-./simulate/build/unitree_mujoco  # Start simulation
-./go2_ctrl -n lo  # Start control
-```
+> Before launching, make sure no other process is occupying the `lowcmd` channel, otherwise the program will report a control conflict.
 
 ### Operation Flow
 
-1. After startup, the console displays "Waiting for connection to robot..."
-2. Ensure the robot is powered on and connected. After a successful connection, the console displays "Connected to robot."
-3. **Enter Stand Mode**: Press **[L2 + A]** on the gamepad. The robot will enter `FixStand` mode and stand up.
-4. **Start RL Control**: Press **[Start + Up/Down/Left/Right]** on the gamepad. The robot switches to the corresponding `Velocity_[UP/DOWN/LEFT/RIGHT].policy_dir` model and starts executing the RL policy. The default configuration uses the Up/Down/Left policy.
-5. **Switch Model**: During operation, you can switch to different RL models at any time by pressing **[Start + Direction Key]**.
-6. **Fixed Command Execution**: Press **[L2 + Y]** on the gamepad. The robot will start executing preset fixed commands (as set in the config file). Press the combination again to stop fixed command execution.
-7. **Enter Damping Mode**: Press **[L2 + B]** on the gamepad. The robot will enter damping mode and stop RL control.
+1. After startup, the console first prints `Waiting for connection to robot...`
+2. After a successful connection, the program prints `Connected to robot.`
+3. `Passive -> FixStand`: press `LT + Up`
+4. Enter control states from `FixStand`:
+   - `RB + Y` -> `Velocity_Y`
+   - `RB + X` -> `Velocity_X`
+   - `RT + Y` -> `BFM_goal`
+   - `RT + X` -> `OmniXtreme`
+5. Return from `Velocity_Y / Velocity_X / BFM_goal / OmniXtreme / BeyondMimic` to `Passive`: press `LT + B`
+6. In the current default configuration, `Velocity_Y`, `Velocity_X`, `BFM_goal`, and `OmniXtreme` can switch directly between each other without returning to `FixStand` first
 
-https://github.com/user-attachments/assets/c39c05c2-92e6-473d-9da7-548f57159edb
+### Runtime Interaction
+
+#### BFM-Zero
+
+The code supports all three task types: `goal`, `reward`, and `tracking`. The current default sample configuration is `BFM_goal`. The default interactions are:
+
+- `Y.on_pressed`: switch to the next latent or goal
+- `X.on_pressed`: reset the current state
+- `B.on_pressed`: start motion playback in `tracking` mode
+
+#### OmniXtreme
+
+- `B.on_pressed`: start or pause execution
+- `Y.on_pressed`: switch to the next trajectory
+- `A.on_pressed`: switch to the previous trajectory
+- `X.on_pressed`: reset the current trajectory
+
+After entering `OmniXtreme`, the controller starts in a paused standing state. Press `B` to start executing the current trajectory.
 
 ## Configuration
 
-The configuration file is located at [deploy/robots/go2/config/config.yaml](./deploy/robots/go2/config/config.yaml). It includes:
-1. **Multi-model selection**: Configure `Velocity/policy_dir_up/down/left/right` to specify paths for four models. Switch models using `Start + Direction Key`.
-2. **Real-time data logging**: Configure `Velocity/logging: true` and set recording frequency `logging_dt` (default 100Hz). Logs are stored in the model folder, e.g., `./logs/rsl_rl/go2_moe_cts_expert_goal_137000_0.6745/logs/`.
-3. **Fixed command execution**: Configure `Velocity/fixed_command/enabled: true`, set fixed command values `command`, and duration `duration` (optional). Press `L2 + Y` to start/stop.
+The main configuration file is [deploy/robots/g1/config/config.yaml](deploy/robots/g1/config/config.yaml).
+
+### Base State Configuration
+
+- `FSM._`: declares enabled states and their `id/type`
+- `FixStand`: configures standing posture `kp`, `kd`, and `qs`
+- `Velocity_Y` / `Velocity_X`: specify the base locomotion model directory with `policy_dir`
+- `transitions`: defines state transitions using the gamepad DSL
 
 ### Changing Policy Models
 
-To change the RL policy, modify the `Velocity_[UP/DOWN/LEFT/RIGHT].policy_dir` fields in `config.yaml`:
+To change the base locomotion model, modify `Velocity_Y.policy_dir` or `Velocity_X.policy_dir` in `config.yaml`:
 
 ```yaml
-Velocity_Up:
-  # Policy model path (relative to the project root or an absolute path)
-  policy_dir: ../../../logs/go2/go2_moe_cts_self_103.5k_0.6669
+Velocity_Y:
+  policy_dir: ../../../logs/g1/velocity/g1_moe_cts_v0.0.5.1
 ```
 
-The specified directory structure should contain:
-- `exported/policy.onnx`: Exported ONNX policy model.
-- `params/deploy.yaml`: Corresponding deployment parameters.
+The target directory should usually contain:
 
-### Default Policies
+- `exported/policy.onnx`
+- `params/deploy.yaml`
 
-- Velocity_Up `Start + Up`: All-terrain policy. Maximum speed of 2m/s with strong obstacle-clearing capabilities.
-- Velocity_Down `Start + Down`: Flat-ground running policy. Maximum speed of 4.5m/s; achieved 4.07m/s in motion capture sprints on short tracks.
-- Velocity_Left `Start + Left`: All-terrain policy. Maximum speed of 2m/s with reduced foot-stumbling compared to the Up model.
+### BFM-Zero Configuration
 
-### Modifying Control Parameters
+Under `FSM.BFM_goal / FSM.BFM_reward / FSM.BFM_tracking`, you can configure:
 
-You can also adjust PD parameters (`kp`, `kd`) and target joint angles (`qs`) for `FixStand` mode in `config.yaml`.
+- `policy_dir`: BFM model directory
+- `deploy_yaml`: deployment parameter path, default `param/deploy.yaml`
+- `onnx_model`: ONNX model path, default `exported/FBcprAuxModel.onnx`
+- `onnx_cuda` / `onnx_tensorrt` / `onnx_cuda_device`: ONNX Runtime backend settings
+- `task_type`: `goal`, `reward`, or `tracking`
+- `latent_file`: latent `.npz` file for the corresponding task
+- `gamepad_map`: overrides for `start_motion`, `next_latent`, and `reset_state`
+- `goal.selected_goals`, `reward.selected_rewards_filter_z`, `tracking.*`: task-specific settings
 
-### Modifying Unexpected Termination Parameters
+Example BFM model directory layout:
 
-The control program terminates if the angle between the `base_link` Z axis and gravity exceeds the threshold. The default value is 2 rad.
+- `exported/FBcprAuxModel.onnx`
+- `param/deploy.yaml`
+- `goal_inference/goal_reaching.npz`
+- `reward_inference/reward_locomotion.npz`
+- `tracking_inference/zs_walking.npz`
 
-Find `bad_orientation` in [State_RLBase.cpp](deploy/robots/go2/src/State_RLBase.cpp) and modify the second parameter to change the radian threshold.
+For BFM, the `deploy.yaml` observations are recommended to use a two-group layout:
+
+- `observations.obs_base`
+- `observations.obs_hist`
+
+This avoids duplicate YAML key conflicts and matches the observation concatenation order used by the current `State_BFM` implementation.
+
+### OmniXtreme Configuration
+
+Under `FSM.OmniXtreme`, you can configure:
+
+- `policy_dir`
+- `deploy_yaml`
+- `base_model`
+- `residual_model`
+- `fk_model`
+- `motion_files`
+- `onnx_cuda` / `onnx_tensorrt` / `onnx_cuda_device`
+- `residual_scale`
+- `loop_trajectory`
+- `root_body_index`
+- `anchor_body_index`
+- `gamepad_map.next_trajectory / previous_trajectory / reset_trajectory / toggle_execute`
+
+Example OmniXtreme model directory layout:
+
+- `exported/base_policy_trt.onnx`
+- `exported/residual_policy.onnx`
+- `exported/fk_trt.onnx`
+- `exported/motions/*.npz`
+- `params/deploy.yaml`
+
+Control-related constants live under the `omnixtreme` section in `params/deploy.yaml`. At minimum, the following fields must be configured correctly:
+
+- `pd_bias_joint_pos`
+- `action_scale`
+- `p_gains / d_gains`
+- `envelope_x1 / envelope_x2 / envelope_y1 / envelope_y2`
+- `friction_va / friction_fs / friction_fd`
+
+### Termination and Troubleshooting
+
+- Base `Velocity_*` states use an abnormal orientation check by default. The threshold is currently hardcoded as `1.0 rad` in [deploy/robots/g1/src/State_RLBase.cpp](deploy/robots/g1/src/State_RLBase.cpp).
+- If `OmniXtreme` can run inference but produces incorrect motions, first check `joint_ids_map`, the first frame posture of the trajectory, and `root_body_index / anchor_body_index`.
+- If BFM reports `Observation term 'xxx' is not registered`, first check whether the observation names in `deploy.yaml` match the observation terms registered on the C++ side.

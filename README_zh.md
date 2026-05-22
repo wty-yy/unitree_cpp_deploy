@@ -1,142 +1,246 @@
 <div align="center">
-  <h1 align="center">Go2 RL CPP Deploy</h1>
+  <h1 align="center">G1 RL CPP Deploy</h1>
   <p align="center">
-    <a href="README.md">🌎 English</a> | <span>🇨🇳 中文</span>
+    <span>中文</span> | <a href="README.md">English</a> | <a href="UPDATE.md">更新记录</a>
   </p>
 </div>
 
-本项目用于在 Unitree Go2 Edu 机器人 (搭载 Orin NX) 上部署强化学习 (RL) 策略，代码基于[unitree_rl_lab](https://github.com/unitreerobotics/unitree_rl_lab)修改，可通过网线或者机载电脑部署。
+本项目用于在 Unitree G1 人形机器人上部署强化学习与模仿学习策略，当前主入口位于 `deploy/robots/g1/`。代码支持基础运控、BFM-Zero、OmniXtreme 以及 BeyondMimic 动作复现；仓库中仍保留 `deploy/robots/go2/` 的 Go2 相关实现。
 
-## 目录结构
+## 目录
 
-```
-unitree_rl_lab/
-├── deploy/                 # 部署相关的代码
-│   ├── include/            # 通用头文件 (FSM, Isaac Lab 接口等)
-│   ├── robots/go2/         # Go2 机器人的主程序、CMakeLists 和配置
-│   └── thirdparty/         # 第三方库 (onnxruntime, json)
-├── logs/                   # 存放训练好的 RL 策略模型
+- [代码结构](#代码结构)
+- [依赖项](#依赖项)
+- [权重下载](#权重下载)
+- [编译步骤](#编译步骤)
+- [运行指南](#运行指南)
+  - [基本用法](#基本用法)
+  - [操作流程](#操作流程)
+  - [运行中交互](#运行中交互)
+- [配置说明](#配置说明)
+  - [基础状态配置](#基础状态配置)
+  - [更换策略模型](#更换策略模型)
+  - [BFM-Zero 配置](#bfm-zero-配置)
+  - [OmniXtreme 配置](#omnixtreme-配置)
+  - [终止与排查](#终止与排查)
+
+## 代码结构
+
+```bash
+unitree_cpp_deploy/
+├── deploy/                     # 部署相关代码
+│   ├── include/                # 通用头文件 (FSM、Isaac Lab 接口等)
+│   ├── robots/g1/              # G1 主程序、CMakeLists 和配置
+│   ├── robots/go2/             # Go2 相关实现
+│   └── thirdparty/             # 第三方库 (onnxruntime、cnpy、json)
+├── docs/                       # 补充文档
+├── logs/                       # 策略模型与动作数据
+├── UPDATE.md                   # 更新记录
 └── README.md
 ```
 
 ## 依赖项
 
-在编译和运行之前，请确保开发环境 (Orin NX) 已安装以下依赖项：
+真机代码使用的版本为Jetpack 6.2，CUDA 12.6.68，刷机请参考 [blog - G1刷机记录](https://wty-yy.github.io/posts/30579/#g1%E5%88%B7%E6%9C%BA%E8%AE%B0%E5%BD%95)
+
+在编译和运行之前，请确保开发环境已安装以下依赖项：
 
 ```bash
-sudo apt install libboost-program-options-dev libyaml-cpp-dev libeigen3-dev libfmt-dev libspdlog-dev
+sudo apt install libboost-program-options-dev libyaml-cpp-dev libeigen3-dev libfmt-dev libspdlog-dev zlib1g-dev
 ```
 
-- **[unitree_sdk2](https://github.com/unitreerobotics/unitree_sdk2)**: Unitree 机器人的开发 SDK。
-- **Boost**: 用于程序选项解析 (`program_options`)。
-- **yaml-cpp**: 用于读取配置文件。
-- **Eigen3**: 矩阵运算库。
-- **fmt**: 格式化输出库。
-- **spdlog**: 日志库。
+- **[unitree_sdk2](https://github.com/unitreerobotics/unitree_sdk2)**: Unitree 机器人开发 SDK，真机 DDS 通信依赖。
 - **onnxruntime**:
-   - x64 Linux: 需下载[onnxruntime-linux-x64-1.23.2.tgz](https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz)解压到`deploy/thirdparty/`文件夹中
-   - Orin NX: 需下载[onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2)解压到`deploy/thirdparty/`文件夹中，修改[{ROBOT}/CMakeLists.txt](deploy/robots/go2/CMakeLists.txt)中的onnx链接路径(解开相应注释)
+  - x64 Linux GPU: 下载 [onnxruntime-linux-x64-gpu-1.24.2.tgz](https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-linux-x64-gpu-1.24.2.tgz) 解压到 `deploy/thirdparty/`
+  - Orin NX GPU: 下载 [onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2) 解压到 `deploy/thirdparty/`
+  - 手动编译：
+    ```bash
+    git clone --recursive https://github.com/microsoft/onnxruntime
+    cd onnxruntime
+    git checkout v1.24.4
+    uv venv  # uv虚拟环境中装上最新的cmake用于编译
+    uv pip install cmake
+    source ./venv/bin/activate
+    ./build.sh --config Release --parallel --build_shared_lib --use_cuda --cuda_home /usr/local/cuda --cudnn_home /usr/lib/aarch64-linux-gnu
+    # 头文件在源码的 include/onnxruntime/ 里，.so 文件则会在 build/Linux/Release/
+    ```
+  - 下载/编译完成后：请同步检查 [deploy/robots/g1/CMakeLists.txt](deploy/robots/g1/CMakeLists.txt) 中对应的 include 和 link 路径注释。
+- **cnpy**: 用于读取 `npy/npz` 文件，已作为子模块接入，无需单独安装系统包。
 
-> 如果使用Orin NX机载电脑部署，则安装aarch64版本的onnxruntime；如果使用x64 Linux电脑链接网线部署，则安装x64版本的onnxruntime并修改ONNX链接路径。
+
+## 权重下载
+
+- `Velocity` 简单运控权重较小，默认位于 `logs/g1/velocity/`
+- `BFM-Zero` 权重较大，请下载 [official_bfm.tar.zst](https://drive.google.com/file/d/1cvdXCLbvyO22YmiV5_FiQPpcx9g3vnGM) 到 `logs/g1/bfm/` 并解压
+- `OmniXtreme` 权重较大，请下载 [official_omnixtreme.tar.zst](https://drive.google.com/file/d/1ffYiU07X2I-bpAYFBqg3ekJ4VNndMIrL/view?usp=sharing) 到 `logs/g1/omnixtreme/` 并解压
+
+```bash
+cd logs/g1/bfm
+tar -xvf official_bfm.tar.zst
+```
 
 ## 编译步骤
 
-1. 进入 Go2 机器人部署目录：
+1. 进入 G1 部署目录：
    ```bash
-   cd deploy/robots/go2
+   cd deploy/robots/g1
    ```
 
-2. 创建编译目录：
+2. 运行 CMake 并编译：
    ```bash
-   mkdir build && cd build
-   ```
-
-3. 运行 CMake 并编译：
-   ```bash
-   cmake .. && make -j8
+   cmake -B build
+   cmake --build build -j$(nproc)
    ```
 
 ## 运行指南
 
-编译完成后，在 `build` 目录下运行生成的 `go2_ctrl` 可执行文件。
+编译完成后，在 `deploy/robots/g1/` 目录下运行生成的 `g1_ctrl` 可执行文件。
 
 ### 基本用法
 
 #### 命令行参数
 
-- `-h, --help`: 显示帮助信息。
-- `-v, --version`: 显示版本信息。
-- `--log`: 开启日志记录 (日志将保存在 `deploy/robots/go2/log/` 目录下)。
-- `-n, --network <interface>`: 指定用于 DDS 通信的网络接口名称 (例如 `eth0`, `wlan0`)。如果不指定，将使用默认接口。
+- `-h, --help`: 显示帮助信息
+- `-v, --version`: 显示版本信息
+- `--log`: 开启日志记录，输出到项目根目录 `log/log.txt`
+- `-n, --network <interface>`: 指定 DDS 通信网卡，例如 `lo`、`eth0`
 
-#### 真机启动
-将Go2启动，进入站立状态后 **[L2+A]** 两次让机械狗趴下，使用手机App连接上后，依次点击：设置-服务状态，关闭`mcf/*`服务，关闭官方控制程序，避免控制冲突。
+#### 启动示例
+
+本机环回测试：
 
 ```bash
-sudo ./go2_ctrl [选项]
+./build/g1_ctrl -n lo
 ```
 
-**示例：**
+真机运行示例：
 
-在NX上启动, 下位机网卡假设为 `eth0`
 ```bash
-./go2_ctrl -n eth0
+./build/g1_ctrl -n eth0
 ```
 
-#### 仿真启动
-
-使用xbox数据协议的手柄即可控制机器人, 如需其他协议, 参考unitree_mujoco修改手柄配置文件
-
-下载并编译[unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco)中的`simulate/`内容，并配置`simulate/config.yaml`中`domain_id: 0`, `use_joystick: 1`
-```bash
-./simulate/build/unitree_mujoco  # 启动仿真
-./go2_ctrl -n lo  # 启动控制
-```
+> 启动前请确保没有其他进程占用 `lowcmd` 通道，否则程序会提示控制冲突。
 
 ### 操作流程
 
-1. 启动程序后，控制台将显示 "Waiting for connection to robot..."
-2. 确保机器人上电并连接正常，程序连接成功后会显示 "Connected to robot."
-3. **进入站立模式**：按下手柄上的 **[L2 + A]** 组合键，机器人将进入 `FixStand` 模式并站立
-4. **开始 RL 控制**：按下手柄上的 **[Start + Up/Down/Left/Right]** 键，机器人将切换到相应的 `Velocity_[UP/DOWN/LEFT/RIGHT].policy_dir` 控制模型，开始执行 RL 策略（默认配置了Up/Down/Left策略）
-5. **模型切换**：在运行过程中，可以随时通过按下 **[Start + 方向键]** 切换到不同的 RL 模型
-6. **固定指令执行**：按下手柄上的 **[L2 + Y]** 组合键，机器人将开始执行预设的固定指令（如配置文件中所设），再次按下该组合键将停止固定指令执行
-7. **进入阻尼模式**：按下手柄上的 **[L2 + B]** 组合键，机器人将进入阻尼模式，停止 RL 控制
+1. 启动程序后，控制台会先显示 `Waiting for connection to robot...`
+2. 连接成功后，程序会显示 `Connected to robot.`
+3. `Passive -> FixStand`：按 `LT + Up`
+4. 从 `FixStand` 进入各控制状态：
+   - `RB + Y` -> `Velocity_Y`
+   - `RB + X` -> `Velocity_X`
+   - `RT + Y` -> `BFM_goal`
+   - `RT + X` -> `OmniXtreme`
+5. 从 `Velocity_Y / Velocity_X / BFM_goal / OmniXtreme / BeyondMimic` 返回 `Passive`：按 `LT + B`
+6. 当前默认配置支持 `Velocity_Y`、`Velocity_X`、`BFM_goal`、`OmniXtreme` 之间直接切换，无需先回 `FixStand`
 
-https://github.com/user-attachments/assets/c39c05c2-92e6-473d-9da7-548f57159edb
+### 运行中交互
+
+#### BFM-Zero
+
+代码支持 `goal / reward / tracking` 三种任务类型，当前默认示例配置为 `BFM_goal`。默认交互如下：
+
+- `Y.on_pressed`: 切换下一个 latent / goal
+- `X.on_pressed`: 重置当前状态
+- `B.on_pressed`: 在 `tracking` 任务中启动动作播放
+
+#### OmniXtreme
+
+- `B.on_pressed`: 开始或暂停动作执行
+- `Y.on_pressed`: 切换到下一条轨迹
+- `A.on_pressed`: 切换到上一条轨迹
+- `X.on_pressed`: 重置当前轨迹
+
+进入 `OmniXtreme` 后默认处于暂停站立状态，按 `B` 后开始执行当前轨迹。
 
 ## 配置说明
 
-配置文件位于 [deploy/robots/go2/config/config.yaml](./deploy/robots/go2/config/config.yaml), 包含功能：
-1. 多模型选择功能, 配置`Velocity/policy_dir_up/down/left/right`, 分别指定四个模型的路径, 按`Start + 方向键`切换模型
-2. 实时记录运行时数据, 配置`Velocity/logging: true`, 设置记录频率 `logging_dt`, 默认100Hz, 存储位置在模型文件夹下, 例如 `./logs/rsl_rl/go2_moe_cts_expert_goal_137000_0.6745/logs/`
-3. 固定指令执行功能, 配置`Velocity/fixed_command/enabled: true`, 设置固定指令值`command`, 以及持续时间`duration`(可选), 按`L2 + Y`启动/停止固定指令执行
+主配置文件位于 [deploy/robots/g1/config/config.yaml](deploy/robots/g1/config/config.yaml)。
+
+### 基础状态配置
+
+- `FSM._`: 声明启用的状态及其 `id/type`
+- `FixStand`: 配置站立姿态的 `kp`、`kd`、`qs`
+- `Velocity_Y` / `Velocity_X`: 通过 `policy_dir` 指定基础运控模型目录
+- `transitions`: 使用手柄 DSL 定义状态跳转条件
 
 ### 更换策略模型
 
-要更换使用的 RL 策略，请修改 `config.yaml` 中的 `Velocity_[UP/DOWN/LEFT/RIGHT].policy_dir` 字段
+要更换基础运控模型，修改 `config.yaml` 中的 `Velocity_Y.policy_dir` 或 `Velocity_X.policy_dir`：
 
 ```yaml
-Velocity_Up:
-  # 策略模型路径 (相对于项目根目录或绝对路径)
-  policy_dir: ../../../logs/go2/go2_moe_cts_self_103.5k_0.6669
+Velocity_Y:
+  policy_dir: ../../../logs/g1/velocity/g1_moe_cts_v0.0.5.1
 ```
 
-指定的目录结构应包含：
-- `exported/policy.onnx`: 导出的 ONNX 策略模型。
-- `params/deploy.yaml`: 对应的部署参数。
+对应目录通常需要包含：
 
-### 默认策略
-- Velocity_Up `Start + Up`: 全地形策略，最大速度2m/s，越障能力较强
-- Velocity_Down `Start + Down`: 纯平地跑步策略，最大速度4.5m/s，短跑道动捕测速4.07m/s
-- Velocity_Left `Start + Left`: 全地形策略，最大速度2m/s，相比Up模型有更少的绊脚
+- `exported/policy.onnx`
+- `params/deploy.yaml`
 
-### 修改控制参数
+### BFM-Zero 配置
 
-你也可以在 `config.yaml` 中调整 `FixStand` 模式下的 PD 参数 (`kp`, `kd`) 以及目标关节角度 (`qs`)。
+在 `FSM.BFM_goal / FSM.BFM_reward / FSM.BFM_tracking` 中可配置：
 
-### 修改意外终止参数
+- `policy_dir`: BFM 模型目录
+- `deploy_yaml`: 部署参数路径，默认 `param/deploy.yaml`
+- `onnx_model`: ONNX 模型路径，默认 `exported/FBcprAuxModel.onnx`
+- `onnx_cuda` / `onnx_tensorrt` / `onnx_cuda_device`: ONNX Runtime 后端设置
+- `task_type`: `goal` / `reward` / `tracking`
+- `latent_file`: 对应任务的 `.npz` 潜变量文件
+- `gamepad_map`: 可覆盖 `start_motion`、`next_latent`、`reset_state`
+- `goal.selected_goals`、`reward.selected_rewards_filter_z`、`tracking.*`: 任务特定参数
 
-根据base_link的z轴与重力夹角大小判断是否处以意外状态，中止控制程序，默认2rad。
+BFM 模型目录约定示例：
 
-在[State_RLBase.cpp](deploy/robots/go2/src/State_RLBase.cpp)文件中找到`bad_orientation`中第二个参数修改rad阈值。
+- `exported/FBcprAuxModel.onnx`
+- `param/deploy.yaml`
+- `goal_inference/goal_reaching.npz`
+- `reward_inference/reward_locomotion.npz`
+- `tracking_inference/zs_walking.npz`
+
+BFM 的 `deploy.yaml` 观测建议使用双组结构：
+
+- `observations.obs_base`
+- `observations.obs_hist`
+
+这样可以避免 YAML 同名 key 冲突，并与当前 `State_BFM` 的观测拼接顺序保持一致。
+
+### OmniXtreme 配置
+
+在 `FSM.OmniXtreme` 中可配置：
+
+- `policy_dir`
+- `deploy_yaml`
+- `base_model`
+- `residual_model`
+- `fk_model`
+- `motion_files`
+- `onnx_cuda` / `onnx_tensorrt` / `onnx_cuda_device`
+- `residual_scale`
+- `loop_trajectory`
+- `root_body_index`
+- `anchor_body_index`
+- `gamepad_map.next_trajectory / previous_trajectory / reset_trajectory / toggle_execute`
+
+OmniXtreme 模型目录约定示例：
+
+- `exported/base_policy_trt.onnx`
+- `exported/residual_policy.onnx`
+- `exported/fk_trt.onnx`
+- `exported/motions/*.npz`
+- `params/deploy.yaml`
+
+控制相关常量位于 `params/deploy.yaml` 的 `omnixtreme` 节中，至少需要正确配置：
+
+- `pd_bias_joint_pos`
+- `action_scale`
+- `p_gains / d_gains`
+- `envelope_x1 / envelope_x2 / envelope_y1 / envelope_y2`
+- `friction_va / friction_fs / friction_fd`
+
+### 终止与排查
+
+- 基础 `Velocity_*` 状态默认使用姿态异常检查，阈值当前在 [deploy/robots/g1/src/State_RLBase.cpp](deploy/robots/g1/src/State_RLBase.cpp) 中固定为 `1.0 rad`
+- 如果 `OmniXtreme` 推理能跑但动作异常，优先检查 `joint_ids_map`、轨迹首帧姿态以及 `root_body_index / anchor_body_index`
+- 如果 BFM 报错 `Observation term 'xxx' is not registered`，优先检查 `deploy.yaml` 中观测项名称是否与 C++ 已注册观测一致
