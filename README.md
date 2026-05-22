@@ -52,7 +52,7 @@ sudo apt install libboost-program-options-dev libyaml-cpp-dev libeigen3-dev libf
 - **[unitree_sdk2](https://github.com/unitreerobotics/unitree_sdk2)**: Unitree robot development SDK, required for real-robot DDS communication.
 - **onnxruntime**:
   - x64 Linux GPU: download [onnxruntime-linux-x64-gpu-1.24.2.tgz](https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-linux-x64-gpu-1.24.2.tgz) and extract it into `deploy/thirdparty/`
-  - Orin NX GPU: download [onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2) and extract it into `deploy/thirdparty/`
+  - Orin NX GPU: download [onnxruntime-linux-aarch64-gpu-1.24.0.tar.gz](https://drive.google.com/file/d/1y8JJkzSfARwLXMRgpk70DfJFv4gmyNkg/view?usp=sharing) and extract it into `deploy/thirdparty/`
   - Manual build:
     ```bash
     git clone --recursive https://github.com/microsoft/onnxruntime
