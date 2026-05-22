@@ -1,4 +1,7 @@
 # UPDATE
+## 20260522 v0.6.4
+1. 新增filter类，支持LPF, Kalman滤波两种，可在配置文件中直接对Velocity, BFM, Omnixtreme配置
+
 ## 20260429 v0.6.3
 **新增BeyondMimic***
 1. 默认是一个自己用kimodo生成的dailylife_back_2_3向后走的模型+轨迹，使用方法参考[config.yaml](deploy/robots/g1/config/config.yaml)中的BeyondMimic配置，通过`RT + A.on_pressed`切换到该模型

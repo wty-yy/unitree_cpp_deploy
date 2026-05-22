@@ -72,6 +72,13 @@ FSM:
       BFM_reward: RT + A.on_pressed
       BFM_tracking: RT + X.on_pressed
     policy_dir: ../../../logs/g1/velocity/g1_moe_cts_v0.0.5_seed1_50k
+    joint_filters:
+      q_target:
+        enabled: true
+        type: lpf
+        joint_indices: [12, 13, 14]
+        lpf:
+          alpha: 0.7
   BFM_goal:
     transitions: 
       Passive: LT + B.on_pressed
@@ -84,12 +91,15 @@ FSM:
     onnx_tensorrt: false
     onnx_cuda: true
     onnx_cuda_device: 0
-    waist_kalman:
-      enabled: true
-      joint_indices: [12, 13, 14]
-      process_noise: 1.0e-4
-      measurement_noise: 2.0e-3
-      initial_error_cov: 1.0e-2
+    joint_filters:
+      q_target:
+        enabled: true
+        type: kalman
+        joint_indices: [12, 13, 14]
+        kalman:
+          process_noise: 1.0e-4
+          measurement_noise: 2.0e-3
+          initial_error_cov: 1.0e-2
     task_type: goal
     latent_file: goal_inference/goal_reaching.npz
     gamepad_map:
@@ -125,12 +135,15 @@ FSM:
     onnx_tensorrt: false
     onnx_cuda: true
     onnx_cuda_device: 0
-    waist_kalman:
-      enabled: true
-      joint_indices: [12, 13, 14]
-      process_noise: 1.0e-4
-      measurement_noise: 2.0e-3
-      initial_error_cov: 1.0e-2
+    joint_filters:
+      q_target:
+        enabled: true
+        type: kalman
+        joint_indices: [12, 13, 14]
+        kalman:
+          process_noise: 1.0e-4
+          measurement_noise: 2.0e-3
+          initial_error_cov: 1.0e-2
     task_type: reward
     latent_file: reward_inference/reward_locomotion.npz
     gamepad_map:
@@ -159,12 +172,15 @@ FSM:
     onnx_tensorrt: false
     onnx_cuda: true
     onnx_cuda_device: 0
-    waist_kalman:
-      enabled: true
-      joint_indices: [12, 13, 14]
-      process_noise: 1.0e-4
-      measurement_noise: 2.0e-3
-      initial_error_cov: 1.0e-2
+    joint_filters:
+      q_target:
+        enabled: true
+        type: kalman
+        joint_indices: [12, 13, 14]
+        kalman:
+          process_noise: 1.0e-4
+          measurement_noise: 2.0e-3
+          initial_error_cov: 1.0e-2
     task_type: tracking
     latent_file: tracking_inference/zs_walking.npz
     gamepad_map:

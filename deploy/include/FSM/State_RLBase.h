@@ -7,6 +7,7 @@
 #include "isaaclab/envs/mdp/actions/joint_actions.h"
 #include "isaaclab/envs/mdp/terminations.h"
 #include "DataLogger.h"
+#include "utils/filters/joint_vector_filter.h"
 #include <chrono>
 
 class State_RLBase : public FSMState
@@ -31,6 +32,10 @@ public:
         }
 
         env->robot->update();
+        filtered_action_.assign(
+            env->robot->data.joint_pos.data(),
+            env->robot->data.joint_pos.data() + env->robot->data.joint_pos.size());
+        action_filter_.reset(filtered_action_);
         // Start policy thread
         policy_thread_running = true;
         policy_thread = std::thread([this]{
@@ -73,6 +78,8 @@ private:
 
     std::thread policy_thread;
     bool policy_thread_running = false;
+    joint_filter::JointVectorFilterBank action_filter_;
+    std::vector<float> filtered_action_;
 };
 
 REGISTER_FSM(State_RLBase)

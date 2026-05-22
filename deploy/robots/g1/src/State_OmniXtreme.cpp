@@ -185,6 +185,64 @@ std::size_t product_of_shape(const std::vector<std::size_t>& shape)
     return std::accumulate(shape.begin(), shape.end(), static_cast<std::size_t>(1), std::multiplies<std::size_t>());
 }
 
+std::vector<int> complement_joint_indices(std::size_t dof, const std::vector<int>& excluded)
+{
+    std::vector<int> out;
+    out.reserve(dof);
+    for (std::size_t i = 0; i < dof; ++i)
+    {
+        const int idx = static_cast<int>(i);
+        if (std::find(excluded.begin(), excluded.end(), idx) == excluded.end())
+        {
+            out.push_back(idx);
+        }
+    }
+    return out;
+}
+
+std::vector<joint_filter::JointFilterConfig> legacy_omni_lpf_filters(
+    std::size_t dof,
+    float default_alpha,
+    float waist_alpha)
+{
+    std::vector<joint_filter::JointFilterConfig> filters;
+    const auto waist_indices = joint_filter::default_waist_joint_indices(dof);
+    const auto non_waist_indices = complement_joint_indices(dof, waist_indices);
+
+    if (!non_waist_indices.empty())
+    {
+        joint_filter::JointFilterConfig cfg;
+        cfg.enabled = true;
+        cfg.type = joint_filter::JointFilterType::Lpf;
+        cfg.has_joint_indices = true;
+        cfg.joint_indices = non_waist_indices;
+        cfg.lpf.alpha = default_alpha;
+        filters.push_back(cfg);
+    }
+
+    if (!waist_indices.empty())
+    {
+        joint_filter::JointFilterConfig cfg;
+        cfg.enabled = true;
+        cfg.type = joint_filter::JointFilterType::Lpf;
+        cfg.has_joint_indices = true;
+        cfg.joint_indices = waist_indices;
+        cfg.lpf.alpha = waist_alpha;
+        filters.push_back(cfg);
+    }
+
+    if (filters.empty())
+    {
+        joint_filter::JointFilterConfig cfg;
+        cfg.enabled = true;
+        cfg.type = joint_filter::JointFilterType::Lpf;
+        cfg.lpf.alpha = default_alpha;
+        filters.push_back(cfg);
+    }
+
+    return filters;
+}
+
 } // namespace
 
 State_OmniXtreme::State_OmniXtreme(int state_mode, std::string state_string)
@@ -198,6 +256,7 @@ State_OmniXtreme::State_OmniXtreme(int state_mode, std::string state_string)
 
     load_policy_and_env(cfg);
     initialize_limits(cfg);
+    initialize_joint_filters(cfg);
     load_motion_library(cfg);
     load_key_config(cfg);
 }
@@ -401,16 +460,6 @@ void State_OmniXtreme::initialize_limits(const YAML::Node& cfg)
 
     action_clip_ = cfg["action_clip"] ? cfg["action_clip"].as<float>() : 1.0f;
     residual_scale_ = cfg["residual_scale"] ? cfg["residual_scale"].as<float>() : 1.0f;
-    q_target_lpf_alpha_ = cfg["q_target_lpf_alpha"] ? cfg["q_target_lpf_alpha"].as<float>() : 0.8f;
-    tau_ff_lpf_alpha_ = cfg["tau_ff_lpf_alpha"] ? cfg["tau_ff_lpf_alpha"].as<float>() : 0.8f;
-    waist_q_target_lpf_alpha_ =
-        cfg["waist_q_target_lpf_alpha"] ? cfg["waist_q_target_lpf_alpha"].as<float>() : q_target_lpf_alpha_;
-    waist_tau_ff_lpf_alpha_ =
-        cfg["waist_tau_ff_lpf_alpha"] ? cfg["waist_tau_ff_lpf_alpha"].as<float>() : 0.5f;
-    q_target_lpf_alpha_ = std::clamp(q_target_lpf_alpha_, 0.0f, 1.0f);
-    tau_ff_lpf_alpha_ = std::clamp(tau_ff_lpf_alpha_, 0.0f, 1.0f);
-    waist_q_target_lpf_alpha_ = std::clamp(waist_q_target_lpf_alpha_, 0.0f, 1.0f);
-    waist_tau_ff_lpf_alpha_ = std::clamp(waist_tau_ff_lpf_alpha_, 0.0f, 1.0f);
     loop_trajectory_ = cfg["loop_trajectory"] ? cfg["loop_trajectory"].as<bool>() : true;
     const YAML::Node omni_cfg = deploy_cfg_["omnixtreme"];
     p_gains_ = require_vec(omni_cfg, "p_gains", dof_);
@@ -426,6 +475,53 @@ void State_OmniXtreme::initialize_limits(const YAML::Node& cfg)
     last_base_action_.assign(dof_, 0.0f);
     latest_q_target_.assign(dof_, 0.0f);
     latest_tau_ff_.assign(dof_, 0.0f);
+}
+
+void State_OmniXtreme::initialize_joint_filters(const YAML::Node& cfg)
+{
+    const std::string q_filter_name = "State_OmniXtreme(" + getStateString() + ") joint_filters.q_target";
+    const std::string tau_filter_name = "State_OmniXtreme(" + getStateString() + ") joint_filters.tau_ff";
+    const auto joint_filters = cfg["joint_filters"];
+
+    if (joint_filters && joint_filters["q_target"])
+    {
+        q_target_filter_.configure(
+            joint_filters["q_target"],
+            dof_,
+            q_filter_name,
+            joint_filter::default_waist_joint_indices(dof_));
+    }
+    else
+    {
+        const float q_target_alpha = cfg["q_target_lpf_alpha"] ? cfg["q_target_lpf_alpha"].as<float>() : 0.8f;
+        const float waist_q_alpha =
+            cfg["waist_q_target_lpf_alpha"] ? cfg["waist_q_target_lpf_alpha"].as<float>() : q_target_alpha;
+        q_target_filter_.configure(
+            legacy_omni_lpf_filters(dof_, q_target_alpha, waist_q_alpha),
+            dof_,
+            q_filter_name,
+            joint_filter::default_waist_joint_indices(dof_));
+    }
+
+    if (joint_filters && joint_filters["tau_ff"])
+    {
+        tau_ff_filter_.configure(
+            joint_filters["tau_ff"],
+            dof_,
+            tau_filter_name,
+            joint_filter::default_waist_joint_indices(dof_));
+    }
+    else
+    {
+        const float tau_ff_alpha = cfg["tau_ff_lpf_alpha"] ? cfg["tau_ff_lpf_alpha"].as<float>() : 0.8f;
+        const float waist_tau_alpha =
+            cfg["waist_tau_ff_lpf_alpha"] ? cfg["waist_tau_ff_lpf_alpha"].as<float>() : 0.5f;
+        tau_ff_filter_.configure(
+            legacy_omni_lpf_filters(dof_, tau_ff_alpha, waist_tau_alpha),
+            dof_,
+            tau_filter_name,
+            joint_filter::default_waist_joint_indices(dof_));
+    }
 }
 
 void State_OmniXtreme::load_motion_library(const YAML::Node& cfg)
@@ -590,10 +686,13 @@ void State_OmniXtreme::enter()
 
     env_->robot->update();
     latest_q_target_.assign(dof_, 0.0f);
+    latest_tau_ff_.assign(dof_, 0.0f);
     for (std::size_t i = 0; i < dof_; ++i)
     {
         latest_q_target_[i] = env_->robot->data.joint_pos[i];
     }
+    q_target_filter_.reset(latest_q_target_);
+    tau_ff_filter_.reset(latest_tau_ff_);
 
     total_steps_ = 0;
     reset_tracking_state(true);
@@ -664,18 +763,10 @@ void State_OmniXtreme::enter()
 
                 tau_ff[i] = -(fs_[i] * std::tanh(dq / va_[i]) + fd_[i] * dq);
             }
+            q_target_filter_.apply(q_target);
+            tau_ff_filter_.apply(tau_ff);
             {
                 std::lock_guard<std::mutex> lock(target_mtx_);
-                for (std::size_t i = 0; i < dof_; ++i)
-                {
-                    const bool is_waist = (i >= 12 && i <= 14);
-                    const float q_alpha = is_waist ? waist_q_target_lpf_alpha_ : q_target_lpf_alpha_;
-                    const float tau_alpha = is_waist ? waist_tau_ff_lpf_alpha_ : tau_ff_lpf_alpha_;
-                    q_target[i] =
-                        (1.0f - q_alpha) * latest_q_target_[i] + q_alpha * q_target[i];
-                    tau_ff[i] =
-                        (1.0f - tau_alpha) * latest_tau_ff_[i] + tau_alpha * tau_ff[i];
-                }
                 latest_q_target_ = std::move(q_target);
                 latest_tau_ff_ = std::move(tau_ff);
             }
@@ -784,6 +875,9 @@ void State_OmniXtreme::warmup_models()
         fk_ms_sum / static_cast<double>(kWarmupIters),
         base_ms_sum / static_cast<double>(kWarmupIters),
         residual_ms_sum / static_cast<double>(kWarmupIters));
+
+    q_target_filter_.reset(latest_q_target_);
+    tau_ff_filter_.reset(latest_tau_ff_);
 }
 
 void State_OmniXtreme::run()

@@ -6,6 +6,7 @@
 #include "FSM/FSMState.h"
 #include "isaaclab/envs/manager_based_rl_env.h"
 #include "onnxruntime_cxx_api.h"
+#include "utils/filters/joint_vector_filter.h"
 #include <unitree/dds_wrapper/common/unitree_joystick.hpp>
 #include <atomic>
 #include <chrono>
@@ -52,6 +53,7 @@ private:
     void load_motion_library(const YAML::Node& cfg);
     void load_key_config(const YAML::Node& cfg);
     void initialize_limits(const YAML::Node& cfg);
+    void initialize_joint_filters(const YAML::Node& cfg);
     void calibrate_yaw_alignment();
     void warmup_models();
 
@@ -134,10 +136,6 @@ private:
 
     float action_clip_{1.0f};
     float residual_scale_{1.0f};
-    float q_target_lpf_alpha_{0.8f};
-    float tau_ff_lpf_alpha_{0.8f};
-    float waist_q_target_lpf_alpha_{0.8f};
-    float waist_tau_ff_lpf_alpha_{0.5f};
     bool loop_trajectory_{true};
     std::size_t total_steps_{0};
 
@@ -159,6 +157,8 @@ private:
     float initial_yaw_offset_{0.0f};
     mutable std::mt19937 rng_{std::random_device{}()};
     mutable std::normal_distribution<float> normal_dist_{0.0f, 1.0f};
+    joint_filter::JointVectorFilterBank q_target_filter_;
+    joint_filter::JointVectorFilterBank tau_ff_filter_;
 };
 
 REGISTER_FSM(State_OmniXtreme)
