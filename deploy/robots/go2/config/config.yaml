@@ -76,6 +76,6 @@ FSM:
       Velocity_Up: start + up
       Velocity_Down: start + down
       Velocity_Left: start + left
-    policy_dir: null
+    policy_dir: ../../../logs/go2/go2_rl_robotlab/go2_moe_cts_v3.3_185k_0.6828
     logging: false
     logging_dt: 0.01
