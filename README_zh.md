@@ -103,7 +103,9 @@ sudo ./go2_ctrl [选项]
 6. **固定指令执行**：按下手柄上的 **[L2 + Y]** 组合键，机器人将开始执行预设的固定指令（如配置文件中所设），再次按下该组合键将停止固定指令执行
 7. **进入阻尼模式**：按下手柄上的 **[L2 + B]** 组合键，机器人将进入阻尼模式，停止 RL 控制
 
-https://github.com/user-attachments/assets/c39c05c2-92e6-473d-9da7-548f57159edb
+部署效果：策略1/2/4由[go2_rl_gym](https://github.com/wty-yy/go2_rl_gym)训练，策略3由[go2_rl_robotlab](https://github.com/wertyuilife2/go2_rl_robotlab)训练。
+
+https://github.com/user-attachments/assets/b72e10f2-ffdb-407d-bb1f-9d545e7f9f63
 
 ## 配置说明
 

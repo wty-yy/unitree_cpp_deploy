@@ -103,7 +103,9 @@ Download and compile the contents of `simulate/` in [unitree_mujoco](https://git
 6. **Fixed Command Execution**: Press **[L2 + Y]** on the gamepad. The robot will start executing preset fixed commands (as set in the config file). Press the combination again to stop fixed command execution.
 7. **Enter Damping Mode**: Press **[L2 + B]** on the gamepad. The robot will enter damping mode and stop RL control.
 
-https://github.com/user-attachments/assets/c39c05c2-92e6-473d-9da7-548f57159edb
+Deployment: Policy 1/2/4 trained by [go2_rl_gym](https://github.com/wty-yy/go2_rl_gym), Policy 3 trained by [go2_rl_robotlab](https://github.com/wertyuilife2/go2_rl_robotlab). 
+
+https://github.com/user-attachments/assets/b72e10f2-ffdb-407d-bb1f-9d545e7f9f63
 
 ## Configuration
 
