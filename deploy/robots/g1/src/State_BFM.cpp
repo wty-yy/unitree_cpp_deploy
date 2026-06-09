@@ -5,6 +5,7 @@
 #include "unitree_joystick_dsl.hpp"
 #include "isaaclab/envs/mdp/terminations.h"
 #include "isaaclab/envs/mdp/observations/observations.h"
+#include "FSM/state_preflight_utils.h"
 
 #include <algorithm>
 #include <cmath>
@@ -151,6 +152,58 @@ joint_filter::JointFilterConfig legacy_bfm_q_target_filter_config(const YAML::No
 }
 
 } // namespace
+
+FsmPreflightResult State_BFM::preflight(const YAML::Node& cfg, const std::string& state_name)
+{
+    std::filesystem::path policy_dir;
+    auto result = fsm_preflight::require_policy_dir(cfg, state_name, policy_dir);
+    if (!result.enabled)
+    {
+        return result;
+    }
+
+    const auto deploy_rel = cfg["deploy_yaml"] ? cfg["deploy_yaml"].as<std::string>() : "param/deploy.yaml";
+    const auto onnx_rel = cfg["onnx_model"] ? cfg["onnx_model"].as<std::string>() : "exported/FBcprAuxModel.onnx";
+    result = fsm_preflight::require_file(
+        fsm_preflight::resolve_under_policy(policy_dir, deploy_rel),
+        "deploy yaml for " + state_name);
+    if (!result.enabled)
+    {
+        return result;
+    }
+    result = fsm_preflight::require_file(
+        fsm_preflight::resolve_under_policy(policy_dir, onnx_rel),
+        "onnx model for " + state_name);
+    if (!result.enabled)
+    {
+        return result;
+    }
+
+    std::string latent_rel;
+    if (cfg["latent_file"])
+    {
+        latent_rel = cfg["latent_file"].as<std::string>();
+    }
+    else
+    {
+        const std::string task = cfg["task_type"] ? cfg["task_type"].as<std::string>() : infer_task_type_from_name(state_name);
+        if (task == "tracking")
+        {
+            latent_rel = "tracking_inference/zs_walking.npz";
+        }
+        else if (task == "reward")
+        {
+            latent_rel = "reward_inference/reward_locomotion.npz";
+        }
+        else
+        {
+            latent_rel = "goal_inference/goal_reaching.npz";
+        }
+    }
+    return fsm_preflight::require_file(
+        fsm_preflight::resolve_under_policy(policy_dir, latent_rel),
+        "latent file for " + state_name);
+}
 
 State_BFM::State_BFM(int state_mode, std::string state_string)
 : FSMState(state_mode, state_string)

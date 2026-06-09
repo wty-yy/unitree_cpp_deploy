@@ -19,17 +19,19 @@ FSM:
     Velocity_X:
       id: 7
       type: RLBase
+    Velocity_A:
+      id: 8
+      type: RLBase
 
   overlay:
     OverlayBeyondMimic:
+      type: Mimic
       target_state: BeyondMimic
       open: RT + A.on_pressed
       select_next: down.on_pressed
       select_prev: up.on_pressed
       confirm: A.on_pressed
       cancel: B.on_pressed
-      motion_files:
-        - ../../../logs/g1/beyondmimic/dailylife_7.3w_20260504/motions
 
   Passive:
     transitions: 
@@ -53,6 +55,7 @@ FSM:
       Passive: LT + B.on_pressed
       Velocity_Y: RB + Y.on_pressed
       Velocity_X: RB + X.on_pressed
+      Velocity_A: RB + A.on_pressed
       BFM_goal: RT + Y.on_pressed
       OmniXtreme: RT + X.on_pressed
     kp: [
@@ -83,6 +86,7 @@ FSM:
     transitions: 
       Passive: LT + B.on_pressed
       Velocity_X: RB + X.on_pressed
+      Velocity_A: RB + A.on_pressed
       BFM_goal: RT + Y.on_pressed
       OmniXtreme: RT + X.on_pressed
     policy_dir: ../../../logs/g1/velocity/g1_moe_cts_v0.0.5.1
@@ -91,10 +95,11 @@ FSM:
     transitions:
       Passive: LT + B.on_pressed
       Velocity_Y: RB + Y.on_pressed
+      Velocity_A: RB + A.on_pressed
       BFM_goal: RT + Y.on_pressed
       OmniXtreme: RT + X.on_pressed
-    policy_dir: ../../../logs/g1/velocity/g1_xjy/g1_mujoco_playgroumd_20260522
-    logging: true
+    policy_dir: ../../../logs/g1/velocity/unitree_rl_mjlab_ppo
+    logging: false
     logging_dt: 0.02
     logging_options:
       obs_terms: true
@@ -104,6 +109,15 @@ FSM:
       robot_state: true
       commands: true
       inference_outputs: true
+
+  Velocity_A:
+    transitions:
+      Passive: LT + B.on_pressed
+      Velocity_Y: RB + Y.on_pressed
+      Velocity_X: RB + X.on_pressed
+      BFM_goal: RT + Y.on_pressed
+      OmniXtreme: RT + X.on_pressed
+    policy_dir: ../../../logs/g1/velocity/unitree_rl_mjlab_fastsac
 
   BFM_goal:
     transitions: 
@@ -218,8 +232,10 @@ FSM:
       OmniXtreme: RT + X.on_pressed
     fps: 30  # Motion file fps
     motion_files:
-      - ../../../logs/g1/beyondmimic/dailylife_7.3w_20260504/motions
-    policy_dir: ../../../logs/g1/beyondmimic/dailylife_7.3w_20260504
+      # - ../../../logs/g1/beyondmimic/dailylife_7.3w_20260504/motions
+      - ../../../logs/g1/beyondmimic/dailylife_walk_v2/motions
+    # policy_dir: ../../../logs/g1/beyondmimic/dailylife_7.3w_20260504
+    policy_dir: ../../../logs/g1/beyondmimic/dailylife_walk_v2
     deploy_yaml: param/deploy.yaml
     onnx_model: exported/policy.onnx
     time_start: null   # Start time [sec], null from the beginning

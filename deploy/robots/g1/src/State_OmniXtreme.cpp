@@ -3,6 +3,7 @@
 #include "cnpy.h"
 #include "unitree_articulation.h"
 #include "unitree_joystick_dsl.hpp"
+#include "FSM/state_preflight_utils.h"
 
 #include <algorithm>
 #include <array>
@@ -244,6 +245,51 @@ std::vector<joint_filter::JointFilterConfig> legacy_omni_lpf_filters(
 }
 
 } // namespace
+
+FsmPreflightResult State_OmniXtreme::preflight(const YAML::Node& cfg, const std::string& state_name)
+{
+    std::filesystem::path policy_dir;
+    auto result = fsm_preflight::require_policy_dir(cfg, state_name, policy_dir);
+    if (!result.enabled)
+    {
+        return result;
+    }
+
+    const auto deploy_rel = cfg["deploy_yaml"] ? cfg["deploy_yaml"].as<std::string>() : "params/deploy.yaml";
+    const auto base_model_rel = cfg["base_model"] ? cfg["base_model"].as<std::string>() : "exported/base_policy_trt.onnx";
+    const auto residual_model_rel = cfg["residual_model"] ? cfg["residual_model"].as<std::string>() : "exported/residual_policy.onnx";
+    const auto fk_model_rel = cfg["fk_model"] ? cfg["fk_model"].as<std::string>() : "exported/fk_trt.onnx";
+
+    result = fsm_preflight::require_file(
+        fsm_preflight::resolve_under_policy(policy_dir, deploy_rel),
+        "deploy yaml for " + state_name);
+    if (!result.enabled)
+    {
+        return result;
+    }
+    result = fsm_preflight::require_file(
+        fsm_preflight::resolve_under_policy(policy_dir, base_model_rel),
+        "base model for " + state_name);
+    if (!result.enabled)
+    {
+        return result;
+    }
+    result = fsm_preflight::require_file(
+        fsm_preflight::resolve_under_policy(policy_dir, residual_model_rel),
+        "residual model for " + state_name);
+    if (!result.enabled)
+    {
+        return result;
+    }
+    result = fsm_preflight::require_file(
+        fsm_preflight::resolve_under_policy(policy_dir, fk_model_rel),
+        "fk model for " + state_name);
+    if (!result.enabled)
+    {
+        return result;
+    }
+    return fsm_preflight::require_npz_motions(cfg, policy_dir, state_name);
+}
 
 State_OmniXtreme::State_OmniXtreme(int state_mode, std::string state_string)
 : FSMState(state_mode, state_string)

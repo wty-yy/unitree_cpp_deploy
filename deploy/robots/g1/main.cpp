@@ -5,6 +5,7 @@
 #include "State_BFM.h"
 #include "State_Mimic.h"
 #include "State_OmniXtreme.h"
+#include "OverlayState_Mimic.h"
 
 std::unique_ptr<LowCmd_t> FSMState::lowcmd = nullptr;
 std::shared_ptr<LowState_t> FSMState::lowstate = nullptr;

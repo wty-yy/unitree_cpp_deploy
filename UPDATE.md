@@ -1,4 +1,9 @@
 # UPDATE
+## 20260609 v0.6.5
+1. 新增state preflight机制，在创建状态前检查`policy_dir`、`deploy_yaml`、onnx模型、latent文件和motion文件是否存在，当Velocity/BFM/OmniXtreme/BeyondMimic等模型依赖缺失时，自动禁用对应state，不再导致程序启动失败，触发已禁用state时保持当前状态，并持续输出warning说明禁用原因
+2. 重构overlay注册
+3. `motion_files`统一放在`FSM.BeyondMimic.motion_files`下，overlay根据`target_state`读取目标状态的动作列表
+
 ## 20260522 v0.6.4
 1. 新增filter类，支持LPF, Kalman滤波两种，可在配置文件中直接对Velocity, BFM, Omnixtreme配置
 2. g1的Velocity中新增logger记录

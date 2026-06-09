@@ -25,6 +25,7 @@ class State_BFM : public FSMState
 {
 public:
     State_BFM(int state_mode, std::string state_string);
+    static FsmPreflightResult preflight(const YAML::Node& cfg, const std::string& state_name);
 
     void enter();
     void run();

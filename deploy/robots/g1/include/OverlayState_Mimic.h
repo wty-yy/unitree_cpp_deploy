@@ -15,10 +15,12 @@ public:
     explicit OverlayState_Mimic(const YAML::Node& cfg)
     {
         target_state_name_ = cfg["target_state"] ? cfg["target_state"].as<std::string>() : "BeyondMimic";
-        load_motion_candidates(cfg);
+        load_motion_candidates();
         if (!motion_selector_ || motion_selector_->empty())
         {
-            throw std::runtime_error("OverlayState_Mimic: no csv motion files found from 'motion_files'");
+            throw std::runtime_error(
+                "OverlayState_Mimic: no csv motion files found from FSM." + target_state_name_ + ".motion_files"
+            );
         }
 
         if (cfg["open"]) key_cfg_.open = cfg["open"].as<std::string>();
@@ -158,8 +160,14 @@ private:
         std::string cancel = "B.on_pressed";
     };
 
-    void load_motion_candidates(const YAML::Node& cfg)
+    void load_motion_candidates()
     {
+        const auto cfg = param::config["FSM"][target_state_name_];
+        if (!cfg)
+        {
+            throw std::runtime_error("OverlayState_Mimic: missing target state config " + target_state_name_);
+        }
+
         std::vector<std::filesystem::path> configured_paths;
         if (cfg["motion_files"])
         {
@@ -176,12 +184,6 @@ private:
                     configured_paths.emplace_back(p);
                 }
             }
-        }
-
-        if (configured_paths.empty() && cfg["motion_file"])
-        {
-            configured_paths.emplace_back(cfg["motion_file"].as<std::string>());
-            spdlog::warn("OverlayState_Mimic: 'motion_file' is deprecated; please switch to 'motion_files'.");
         }
 
         const auto files = PathFileManager::collect_csv_files(configured_paths, param::proj_dir);
@@ -204,3 +206,5 @@ private:
     inline static bool has_confirmed_motion_{false};
     inline static std::filesystem::path confirmed_motion_file_{};
 };
+
+REGISTER_FSM_OVERLAY(OverlayState_Mimic)

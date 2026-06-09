@@ -4,6 +4,7 @@
 #include "isaaclab/envs/mdp/observations/observations.h"
 #include "isaaclab/envs/mdp/actions/joint_actions.h"
 #include "isaaclab/envs/mdp/terminations.h"
+#include "FSM/state_preflight_utils.h"
 
 static Eigen::Quaternionf init_quat;
 std::shared_ptr<State_Mimic::MotionLoader_> State_Mimic::motion = nullptr;
@@ -115,6 +116,34 @@ REGISTER_OBSERVATION(motion_anchor_ori_b)
 
 } // namespace mdp
 } // namespace isaaclab
+
+FsmPreflightResult State_Mimic::preflight(const YAML::Node& cfg, const std::string& state_name)
+{
+    std::filesystem::path policy_dir;
+    auto result = fsm_preflight::require_policy_dir(cfg, state_name, policy_dir);
+    if (!result.enabled)
+    {
+        return result;
+    }
+
+    const auto deploy_rel = cfg["deploy_yaml"] ? cfg["deploy_yaml"].as<std::string>() : "params/deploy.yaml";
+    const auto onnx_rel = cfg["onnx_model"] ? cfg["onnx_model"].as<std::string>() : "exported/policy.onnx";
+    result = fsm_preflight::require_file(
+        fsm_preflight::resolve_under_policy(policy_dir, deploy_rel),
+        "deploy yaml for " + state_name);
+    if (!result.enabled)
+    {
+        return result;
+    }
+    result = fsm_preflight::require_file(
+        fsm_preflight::resolve_under_policy(policy_dir, onnx_rel),
+        "policy model for " + state_name);
+    if (!result.enabled)
+    {
+        return result;
+    }
+    return fsm_preflight::require_csv_motions(cfg, state_name);
+}
 
 State_Mimic::State_Mimic(int state_mode, std::string state_string)
     : FSMState(state_mode, std::move(state_string))

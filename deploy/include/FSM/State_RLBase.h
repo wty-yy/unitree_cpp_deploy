@@ -14,6 +14,7 @@ class State_RLBase : public FSMState
 {
 public:
     State_RLBase(int state_mode, std::string state_string);
+    static FsmPreflightResult preflight(const YAML::Node& cfg, const std::string& state_name);
     
     void enter()
     {

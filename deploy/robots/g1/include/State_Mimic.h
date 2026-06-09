@@ -1,7 +1,7 @@
 #pragma once
 
 #include "FSM/FSMState.h"
-#include "FSM/OverlayState_Mimic.h"
+#include "OverlayState_Mimic.h"
 #include "isaaclab/envs/manager_based_rl_env.h"
 #include "utils/path_file_manager.h"
 #include <array>
@@ -13,6 +13,7 @@ class State_Mimic : public FSMState
 {
 public:
     State_Mimic(int state_mode, std::string state_string);
+    static FsmPreflightResult preflight(const YAML::Node& cfg, const std::string& state_name);
 
     void enter();
     void run();

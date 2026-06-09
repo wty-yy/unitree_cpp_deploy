@@ -2,6 +2,7 @@
 #include "unitree_articulation.h"
 #include "isaaclab/envs/mdp/observations/observations.h"
 #include "isaaclab/envs/mdp/actions/joint_actions.h"
+#include "FSM/state_preflight_utils.h"
 #include <ctime>
 #include <iomanip>
 #include <sstream>
@@ -82,16 +83,27 @@ std::string observation_term_log_key(const isaaclab::ObservationTermSnapshot& sn
 }
 }
 
+FsmPreflightResult State_RLBase::preflight(const YAML::Node& cfg, const std::string& state_name)
+{
+    std::filesystem::path policy_dir;
+    auto result = fsm_preflight::require_policy_dir(cfg, state_name, policy_dir);
+    if (!result.enabled)
+    {
+        return result;
+    }
+
+    result = fsm_preflight::require_file(policy_dir / "params" / "deploy.yaml", "deploy yaml for " + state_name);
+    if (!result.enabled)
+    {
+        return result;
+    }
+    return fsm_preflight::require_file(policy_dir / "exported" / "policy.onnx", "policy model for " + state_name);
+}
+
 State_RLBase::State_RLBase(int state_mode, std::string state_string)
 : FSMState(state_mode, state_string) 
 {
     auto cfg = param::config["FSM"][state_string];
-
-    if (!cfg["policy_dir"] || cfg["policy_dir"].IsNull())
-    {
-        spdlog::warn("State_{}: policy_dir is null or undefined. This state will be disabled.", state_string);
-        return;
-    }
 
     auto policy_dir = param::parser_policy_dir(cfg["policy_dir"].as<std::string>());
 

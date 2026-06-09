@@ -2,6 +2,7 @@
 #include "unitree_articulation.h"
 #include "isaaclab/envs/mdp/observations/observations.h"
 #include "isaaclab/envs/mdp/actions/joint_actions.h"
+#include "FSM/state_preflight_utils.h"
 
 namespace
 {
@@ -21,6 +22,23 @@ std::vector<joint_filter::JointFilterConfig> default_velocity_q_target_filters(s
     filter_cfg.lpf.alpha = 0.7f;
     return {filter_cfg};
 }
+}
+
+FsmPreflightResult State_RLBase::preflight(const YAML::Node& cfg, const std::string& state_name)
+{
+    std::filesystem::path policy_dir;
+    auto result = fsm_preflight::require_policy_dir(cfg, state_name, policy_dir);
+    if (!result.enabled)
+    {
+        return result;
+    }
+
+    result = fsm_preflight::require_file(policy_dir / "params" / "deploy.yaml", "deploy yaml for " + state_name);
+    if (!result.enabled)
+    {
+        return result;
+    }
+    return fsm_preflight::require_file(policy_dir / "exported" / "policy.onnx", "policy model for " + state_name);
 }
 
 State_RLBase::State_RLBase(int state_mode, std::string state_string)

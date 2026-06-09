@@ -1,6 +1,10 @@
 #pragma once
 
+#include <functional>
+#include <memory>
 #include <string>
+#include <unordered_map>
+#include <yaml-cpp/yaml.h>
 
 class FSMOverlayState
 {
@@ -67,3 +71,22 @@ private:
     bool finished_{false};
     int requested_state_id_{0};
 };
+
+using FsmOverlayFactory = std::function<std::shared_ptr<FSMOverlayState>(const YAML::Node&)>;
+using FsmOverlayMap = std::unordered_map<std::string, FsmOverlayFactory>;
+
+inline FsmOverlayMap& getFsmOverlayMap()
+{
+    static FsmOverlayMap overlay_map;
+    return overlay_map;
+}
+
+#define REGISTER_FSM_OVERLAY(Derived) \
+    inline std::shared_ptr<FSMOverlayState> __factory_##Derived(const YAML::Node& cfg) { \
+        return std::make_shared<Derived>(cfg);                                          \
+    }                                                                                   \
+    inline struct __registrar_##Derived {                                               \
+        __registrar_##Derived() {                                                       \
+            getFsmOverlayMap()[#Derived] = __factory_##Derived;                         \
+        }                                                                               \
+    } __registrar_instance_##Derived;
