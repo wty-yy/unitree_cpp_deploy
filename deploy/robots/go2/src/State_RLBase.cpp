@@ -1,7 +1,38 @@
 #include "FSM/State_RLBase.h"
+#include "UdpSocket.h"
 #include "unitree_articulation.h"
 #include "isaaclab/envs/mdp/observations/observations.h"
 #include "isaaclab/envs/mdp/actions/joint_actions.h"
+
+#include <cstdint>
+#include <memory>
+#include <stdexcept>
+#include <unordered_map>
+
+namespace
+{
+
+struct JointPosPacket
+{
+    uint32_t magic = 0x4a504f53; // "JPOS"
+    uint32_t seq = 0;
+    uint64_t time_ns = 0;
+    float q[12]{};
+};
+
+static_assert(sizeof(JointPosPacket) == 64, "Unexpected joint position UDP packet size");
+
+struct JointPosUdpState
+{
+    std::unique_ptr<UdpSocket> socket;
+    std::chrono::duration<double> dt{0.01};
+    std::chrono::steady_clock::time_point last_send_time;
+    uint32_t seq = 0;
+};
+
+std::unordered_map<int, JointPosUdpState> joint_pos_udp_states;
+
+} // namespace
 
 State_RLBase::State_RLBase(int state_mode, std::string state_string)
 : FSMState(state_mode, state_string) 
@@ -50,6 +81,33 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
         
         start_time = std::chrono::steady_clock::now();
         last_log_time = start_time - std::chrono::duration_cast<std::chrono::steady_clock::duration>(logging_dt);
+    }
+
+    if (cfg["joint_pos_udp"] && cfg["joint_pos_udp"]["enabled"].as<bool>(false)) {
+        const auto udp_cfg = cfg["joint_pos_udp"];
+        const auto host = udp_cfg["host"] ? udp_cfg["host"].as<std::string>() : "127.0.0.1";
+        const auto port = udp_cfg["port"] ? udp_cfg["port"].as<uint16_t>() : 15000;
+        std::chrono::duration<double> udp_dt{0.01};
+        if (udp_cfg["dt"]) {
+            udp_dt = std::chrono::duration<double>(udp_cfg["dt"].as<double>());
+        }
+
+        try {
+            if (udp_dt.count() <= 0.0) {
+                throw std::runtime_error("joint_pos_udp.dt must be positive");
+            }
+
+            JointPosUdpState udp_state;
+            udp_state.socket = std::make_unique<UdpSocket>(host, port);
+            udp_state.dt = udp_dt;
+            udp_state.last_send_time = std::chrono::steady_clock::now()
+                - std::chrono::duration_cast<std::chrono::steady_clock::duration>(udp_state.dt);
+            joint_pos_udp_states[state_mode] = std::move(udp_state);
+            spdlog::info("Joint position UDP enabled. Sending to {}:{} at {:.1f} Hz",
+                host, port, 1.0 / udp_state.dt.count());
+        } catch (const std::exception& e) {
+            spdlog::warn("Joint position UDP disabled: {}", e.what());
+        }
     }
 
     // Initialize fixed command settings
@@ -106,6 +164,24 @@ void State_RLBase::run()
     auto action = env->action_manager->processed_actions();
     for(int i(0); i < env->robot->data.joint_ids_map.size(); i++) {
         lowcmd->msg_.motor_cmd()[env->robot->data.joint_ids_map[i]].q() = action[i];
+    }
+
+    auto udp_it = joint_pos_udp_states.find(getState());
+    if (udp_it != joint_pos_udp_states.end()) {
+        auto& udp_state = udp_it->second;
+        auto now = std::chrono::steady_clock::now();
+        if (now - udp_state.last_send_time >= udp_state.dt) {
+            udp_state.last_send_time = now;
+
+            JointPosPacket packet;
+            packet.seq = udp_state.seq++;
+            packet.time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            for (int i(0); i < 12; ++i) {
+                packet.q[i] = lowstate->msg_.motor_state()[i].q();
+            }
+            udp_state.socket->send(&packet, sizeof(packet));
+        }
     }
 
     // Logging

@@ -1,4 +1,8 @@
 # UPDATE
+## 20260628 v0.6.4
+**新增UDP发送joint pos功能**
+1. 在[config.yaml](deploy/robots/go2/config/config.yaml)中打开`joint_pos_udp.enabled`字段, 并设置UDP发送的IP和端口, python接收用例为[udp_test.py](scripts/udp_test.py)
+
 ## 20260429 v0.6.3
 **新增BeyondMimic***
 1. 默认是一个自己用kimodo生成的dailylife_back_2_3向后走的模型+轨迹，使用方法参考[config.yaml](deploy/robots/g1/config/config.yaml)中的BeyondMimic配置，通过`RT + A.on_pressed`切换到该模型

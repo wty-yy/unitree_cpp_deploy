@@ -44,8 +44,6 @@ FSM:
       Velocity_Left: start + left
       Velocity_Right: start + right
     policy_dir: ../../../logs/go2/go2_moe_cts_137k_0.6713
-    logging: false
-    logging_dt: 0.01
     fixed_command:
       enabled: true
       lin_vel_x: 1.0
@@ -59,8 +57,6 @@ FSM:
       Velocity_Left: start + left
       Velocity_Right: start + right
     policy_dir: ../../../logs/go2/go2_moe_cts_flat_max4.5_71k  # fast model
-    logging: false
-    logging_dt: 0.01
   Velocity_Left:
     transitions: 
       Passive: LT + B.on_pressed
@@ -68,8 +64,6 @@ FSM:
       Velocity_Down: start + down
       Velocity_Right: start + right
     policy_dir: ../../../logs/go2/go2_moe_cts_164k_0.6715
-    logging: false
-    logging_dt: 0.01
   Velocity_Right:
     transitions: 
       Passive: LT + B.on_pressed
@@ -79,3 +73,14 @@ FSM:
     policy_dir: ../../../logs/go2/go2_rl_robotlab/go2_moe_cts_v3.3_185k_0.6828
     logging: false
     logging_dt: 0.01
+    fixed_command:
+      enabled: true
+      lin_vel_x: 1.0
+      lin_vel_y: 0.0
+      ang_vel_z: 0.0
+      duration: 3.5
+    joint_pos_udp:
+      enabled: true
+      host: 192.168.1.255
+      port: 15000
+      dt: 0.1
