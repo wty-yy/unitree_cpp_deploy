@@ -1,6 +1,6 @@
 #include "FSM/CtrlFSM.h"
 #include "FSM/State_Passive.h"
-#include "FSM/State_FixStand.h"
+#include "FSM/State_Fix.h"
 #include "FSM/State_RLBase.h"
 
 std::unique_ptr<LowCmd_t> FSMState::lowcmd = nullptr;
@@ -41,8 +41,11 @@ int main(int argc, char** argv)
     auto fsm = std::make_unique<CtrlFSM>(param::config["FSM"]);
     fsm->start();
 
-    std::cout << "Press [L2 + A] to enter FixStand mode.\n";
-    std::cout << "Then press [Start + Up/Down/Left/Right] to select and start a policy.\n";
+    std::cout << "State transitions:\n";
+    std::cout << "  [L2 + A]: Passive -> FixStand, Velocity_* -> FixSquat, FixSquat -> FixStand\n";
+    std::cout << "  [Start + Up/Down/Left/Right]: FixStand -> Velocity_*\n";
+    std::cout << "  [L2 + B]: FixStand / FixSquat / Velocity_* -> Passive\n";
+    std::cout << "  [Auto]: FixSquat -> Passive after the squat trajectory finishes\n";
 
     while (true)
     {
@@ -51,4 +54,3 @@ int main(int argc, char** argv)
     
     return 0;
 }
-

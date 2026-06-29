@@ -164,11 +164,16 @@ Passive:
   kd: [3,3,3, ...]      # 阻尼系数
 ```
 
-### State_FixStand
+### State_Fix
 
-固定站立，通过线性插值从当前位置运动到目标位置。
+固定姿态插值状态，通过线性插值从当前位置运动到目标关节位置。`FixStand`、`FixSquat` 这类状态可以通过 `type: Fix` 复用它。
 
 ```yaml
+_:
+  FixStand:
+    id: 2
+    type: Fix
+
 FixStand:
   transitions:
     Passive: LT + B.on_pressed
@@ -223,6 +228,7 @@ FSM:
       id: 1
     FixStand:
       id: 2
+      type: Fix
     Velocity:
       id: 3
       type: RLBase
@@ -259,6 +265,7 @@ FSM:
       id: 1
     FixStand:
       id: 2
+      type: Fix
     Velocity_Up:
       id: 4
       type: RLBase

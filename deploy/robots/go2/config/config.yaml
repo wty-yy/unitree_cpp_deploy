@@ -4,6 +4,10 @@ FSM:
       id: 1
     FixStand:
       id: 2
+      type: Fix
+    FixSquat:
+      id: 3
+      type: Fix
     Velocity_Up:
       id: 4
       type: RLBase
@@ -25,6 +29,7 @@ FSM:
   FixStand:
     transitions: 
       Passive: LT + B.on_pressed
+      FixSquat: LT + A.on_pressed
       Velocity_Up: start + up
       Velocity_Down: start + down
       Velocity_Left: start + left
@@ -37,9 +42,23 @@ FSM:
       [0.0, 1.36, -2.65, 0.0, 1.36, -2.65, 0.0, 1.36, -2.65, 0.0, 1.36, -2.65],
       [0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5],
     ]
+  FixSquat:
+    transitions:
+      Passive: LT + B.on_pressed
+      FixStand: LT + A.on_pressed
+    auto_transition: Passive
+    kp: [60, 80, 80, 60, 80, 80, 60, 80, 80, 60, 80, 80]
+    kd: [5, 4, 4, 5, 4, 4, 5, 4, 4, 5, 4, 4]
+    ts: [0, 1, 2]
+    qs: [
+      [],
+      [0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5],
+      [0.0, 1.36, -2.65, 0.0, 1.36, -2.65, 0.0, 1.36, -2.65, 0.0, 1.36, -2.65],
+    ]
   Velocity_Up:
     transitions: 
       Passive: LT + B.on_pressed
+      FixSquat: LT + A.on_pressed
       Velocity_Down: start + down
       Velocity_Left: start + left
       Velocity_Right: start + right
@@ -53,6 +72,7 @@ FSM:
   Velocity_Down:
     transitions: 
       Passive: LT + B.on_pressed
+      FixSquat: LT + A.on_pressed
       Velocity_Up: start + up
       Velocity_Left: start + left
       Velocity_Right: start + right
@@ -60,6 +80,7 @@ FSM:
   Velocity_Left:
     transitions: 
       Passive: LT + B.on_pressed
+      FixSquat: LT + A.on_pressed
       Velocity_Up: start + up
       Velocity_Down: start + down
       Velocity_Right: start + right
@@ -67,6 +88,7 @@ FSM:
   Velocity_Right:
     transitions: 
       Passive: LT + B.on_pressed
+      FixSquat: LT + A.on_pressed
       Velocity_Up: start + up
       Velocity_Down: start + down
       Velocity_Left: start + left

@@ -1,6 +1,6 @@
 #include "FSM/CtrlFSM.h"
 #include "FSM/State_Passive.h"
-#include "FSM/State_FixStand.h"
+#include "FSM/State_Fix.h"
 #include "FSM/State_RLBase.h"
 #include "State_BFM.h"
 #include "State_Mimic.h"

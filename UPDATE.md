@@ -1,4 +1,8 @@
 # UPDATE
+## 20260629 v0.6.5
+**新增L2+A缓慢蹲下的功能**
+1. 重新命名类`State_FixStand`为`State_Fix`，用于不同的固定姿态转换，新增模型切换到`L2+A`，从缓慢蹲下到Passive模式，避免直接Passive导致侧向倒下问题
+
 ## 20260628 v0.6.4
 **新增UDP发送joint pos功能**
 1. 在[config.yaml](deploy/robots/go2/config/config.yaml)中打开`joint_pos_udp.enabled`字段, 并设置UDP发送的IP和端口, python接收用例为[udp_test.py](scripts/udp_test.py)
@@ -72,7 +76,7 @@
     - 新增从 YAML `transitions` 节读取跳转条件，使用 DSL 解析器将字符串表达式编译为运行时谓词
 4. 新增 [unitree_joystick_dsl.hpp](deploy/include/unitree_joystick_dsl.hpp):
     - 手柄按键组合 DSL 解析器，支持 `+`(AND)、`|`(OR)、`!`(NOT)、`()`分组、`.on_pressed`/`.on_released`/`.pressed` 状态检测、`LT(2s)` 长按检测
-5. [State_FixStand.h](deploy/include/FSM/State_FixStand.h) / [State_Passive.h](deploy/include/FSM/State_Passive.h) / [State_RLBase.h](deploy/include/FSM/State_RLBase.h):
+5. [State_Fix.h](deploy/include/FSM/State_Fix.h) / [State_Passive.h](deploy/include/FSM/State_Passive.h) / [State_RLBase.h](deploy/include/FSM/State_RLBase.h):
     - 构造函数统一为 `(int state, std::string state_string)` 签名
     - 添加 `REGISTER_FSM` 宏注册
     - `State_RLBase` 移除 `policy_key`/`config_name` 参数，改为从 `FSM.{state_string}.policy_dir` 读取

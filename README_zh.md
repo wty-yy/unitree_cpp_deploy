@@ -101,7 +101,7 @@ sudo ./go2_ctrl [选项]
 4. **开始 RL 控制**：按下手柄上的 **[Start + Up/Down/Left/Right]** 键，机器人将切换到相应的 `Velocity_[UP/DOWN/LEFT/RIGHT].policy_dir` 控制模型，开始执行 RL 策略（默认配置了Up/Down/Left策略）
 5. **模型切换**：在运行过程中，可以随时通过按下 **[Start + 方向键]** 切换到不同的 RL 模型
 6. **固定指令执行**：按下手柄上的 **[L2 + Y]** 组合键，机器人将开始执行预设的固定指令（如配置文件中所设），再次按下该组合键将停止固定指令执行
-7. **进入阻尼模式**：按下手柄上的 **[L2 + B]** 组合键，机器人将进入阻尼模式，停止 RL 控制
+7. **进入阻尼模式**：按下手柄上的 **[L2 + A]** 或 **[L2 + B]** 组合键，机器人将停止 RL 控制，进入蹲下或阻尼模式，
 
 部署效果：策略1/2/4由[go2_rl_gym](https://github.com/wty-yy/go2_rl_gym)训练，策略3由[go2_rl_robotlab](https://github.com/wertyuilife2/go2_rl_robotlab)训练。
 

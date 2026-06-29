@@ -4,6 +4,7 @@ FSM:
       id: 1
     FixStand:
       id: 2
+      type: Fix
     Velocity:
       id: 3
       type: RLBase

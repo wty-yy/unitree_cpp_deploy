@@ -101,7 +101,7 @@ Download and compile the contents of `simulate/` in [unitree_mujoco](https://git
 4. **Start RL Control**: Press **[Start + Up/Down/Left/Right]** on the gamepad. The robot switches to the corresponding `Velocity_[UP/DOWN/LEFT/RIGHT].policy_dir` model and starts executing the RL policy. The default configuration uses the Up/Down/Left policy.
 5. **Switch Model**: During operation, you can switch to different RL models at any time by pressing **[Start + Direction Key]**.
 6. **Fixed Command Execution**: Press **[L2 + Y]** on the gamepad. The robot will start executing preset fixed commands (as set in the config file). Press the combination again to stop fixed command execution.
-7. **Enter Damping Mode**: Press **[L2 + B]** on the gamepad. The robot will enter damping mode and stop RL control.
+7. **Enter Damping Mode**: Press **[L2 + A]** or **[L2 + B]** on the gamepad. The robot will stop RL control and enter squat or damping mode.
 
 Deployment: Policy 1/2/4 trained by [go2_rl_gym](https://github.com/wty-yy/go2_rl_gym), Policy 3 trained by [go2_rl_robotlab](https://github.com/wertyuilife2/go2_rl_robotlab). 
 
