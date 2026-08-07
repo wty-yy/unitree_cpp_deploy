@@ -34,7 +34,7 @@ sudo apt install libboost-program-options-dev libyaml-cpp-dev libeigen3-dev libf
 - **fmt**: 格式化输出库。
 - **spdlog**: 日志库。
 - **onnxruntime**:
-   - x64 Linux: 需下载[onnxruntime-linux-x64-1.23.2.tgz](https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz)解压到`deploy/thirdparty/`文件夹中
+   - x64 Linux（GPU）：需下载 [onnxruntime-linux-x64-gpu-1.24.2.tgz](https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-linux-x64-gpu-1.24.2.tgz) 并解压到 `deploy/thirdparty/` 文件夹中
    - Orin NX: 需下载[onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2)解压到`deploy/thirdparty/`文件夹中，修改[{ROBOT}/CMakeLists.txt](deploy/robots/go2/CMakeLists.txt)中的onnx链接路径(解开相应注释)
 
 > 如果使用Orin NX机载电脑部署，则安装aarch64版本的onnxruntime；如果使用x64 Linux电脑链接网线部署，则安装x64版本的onnxruntime并修改ONNX链接路径。
@@ -142,3 +142,8 @@ Velocity_Up:
 根据base_link的z轴与重力夹角大小判断是否处以意外状态，中止控制程序，默认2rad。
 
 在[State_RLBase.cpp](deploy/robots/go2/src/State_RLBase.cpp)文件中找到`bad_orientation`中第二个参数修改rad阈值。
+
+## 许可证
+
+- 项目自有代码采用 [MIT 许可证](LICENSE)。
+- 基于 [Unitree RL Lab](https://github.com/unitreerobotics/unitree_rl_lab) 的代码采用 Apache 2.0 许可证，完整条款见 [Unitree RL Lab 许可证](docs/licenses/unitree-rl-lab-license.txt)。

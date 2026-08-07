@@ -11,7 +11,7 @@ namespace isaaclab
 REGISTER_OBSERVATION(keyboard_velocity_commands)
 {
     std::string key = FSMState::keyboard->key();
-    static auto cfg = env->cfg["commands"]["base_velocity"]["ranges"];
+    static auto cfg = env->policy_cfg["commands"]["base_velocity"]["ranges"];
 
     static std::unordered_map<std::string, std::vector<float>> key_commands = {
         {"w", {1.0f, 0.0f, 0.0f}},

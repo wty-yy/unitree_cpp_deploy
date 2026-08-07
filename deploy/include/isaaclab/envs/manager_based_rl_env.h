@@ -10,6 +10,7 @@
 #include "isaaclab/envs/mdp/commands/motion_command.h"
 #include "isaaclab/assets/articulation/articulation.h"
 #include "isaaclab/algorithms/algorithms.h"
+#include "utils/VelocityCommandDamper.h"
 #include <iostream>
 #include <map>
 #include <string>
@@ -24,46 +25,50 @@ class ManagerBasedRLEnv
 {
 public:
     // Constructor
-    ManagerBasedRLEnv(YAML::Node cfg, std::shared_ptr<Articulation> robot_)
-    :cfg(cfg), robot(std::move(robot_))
+    ManagerBasedRLEnv(
+        YAML::Node policy_cfg,
+        std::shared_ptr<Articulation> robot_,
+        const YAML::Node& fsm_cfg = YAML::Node())
+    :policy_cfg(policy_cfg), robot(std::move(robot_))
     {
         // Parse configuration
-        this->step_dt = cfg["step_dt"].as<float>();
-        robot->data.joint_ids_map = cfg["joint_ids_map"].as<std::vector<float>>();
+        this->step_dt = policy_cfg["step_dt"].as<float>();
+        robot->data.joint_ids_map = policy_cfg["joint_ids_map"].as<std::vector<float>>();
         robot->data.joint_pos.resize(robot->data.joint_ids_map.size());
         robot->data.joint_vel.resize(robot->data.joint_ids_map.size());
 
         { // default joint positions
             std::vector<float> default_joint_pos(robot->data.joint_ids_map.size(), 0.0f);
-            if (cfg["default_joint_pos"])
+            if (policy_cfg["default_joint_pos"])
             {
-                default_joint_pos = cfg["default_joint_pos"].as<std::vector<float>>();
+                default_joint_pos = policy_cfg["default_joint_pos"].as<std::vector<float>>();
             }
             robot->data.default_joint_pos = Eigen::VectorXf::Map(default_joint_pos.data(), default_joint_pos.size());
         }
         { // joint stiffness and damping
             robot->data.joint_stiffness.assign(robot->data.joint_ids_map.size(), 0.0f);
             robot->data.joint_damping.assign(robot->data.joint_ids_map.size(), 0.0f);
-            if (cfg["stiffness"])
+            if (policy_cfg["stiffness"])
             {
-                robot->data.joint_stiffness = cfg["stiffness"].as<std::vector<float>>();
+                robot->data.joint_stiffness = policy_cfg["stiffness"].as<std::vector<float>>();
             }
-            if (cfg["damping"])
+            if (policy_cfg["damping"])
             {
-                robot->data.joint_damping = cfg["damping"].as<std::vector<float>>();
+                robot->data.joint_damping = policy_cfg["damping"].as<std::vector<float>>();
             }
         }
 
         robot->update();
+        velocity_command_damper_.configure(this->policy_cfg, fsm_cfg, robot->data.joystick);
 
         // load managers
-        if (cfg["actions"])
+        if (policy_cfg["actions"])
         {
-            action_manager = std::make_unique<ActionManager>(cfg["actions"], this);
+            action_manager = std::make_unique<ActionManager>(policy_cfg["actions"], this);
         }
-        if (cfg["observations"])
+        if (policy_cfg["observations"])
         {
-            observation_manager = std::make_unique<ObservationManager>(cfg["observations"], this);
+            observation_manager = std::make_unique<ObservationManager>(policy_cfg["observations"], this);
         }
     }
 
@@ -72,6 +77,11 @@ public:
         global_phase = 0;
         episode_length = 0;
         robot->update();
+        velocity_command_damper_.reset();
+        velocity_command_damper_.update(
+            step_dt,
+            fixed_command_enabled && fixed_command_active,
+            {fixed_lin_vel_x, fixed_lin_vel_y, fixed_ang_vel_z});
         if(robot->data.motion_loader) {
             robot->data.motion_loader->reset(robot->data);
         }
@@ -83,6 +93,10 @@ public:
     {
         episode_length += 1;
         robot->update();
+        velocity_command_damper_.update(
+            step_dt,
+            fixed_command_enabled && fixed_command_active,
+            {fixed_lin_vel_x, fixed_lin_vel_y, fixed_ang_vel_z});
         if(robot->data.motion_loader) {
             robot->data.motion_loader->update(episode_length * step_dt);
         }
@@ -104,9 +118,14 @@ public:
         action_manager->process_action(action);
     }
 
+    const std::vector<float>& velocity_command() const
+    {
+        return velocity_command_damper_.command();
+    }
+
     float step_dt;
     
-    YAML::Node cfg;
+    YAML::Node policy_cfg;
 
     std::unique_ptr<ObservationManager> observation_manager;
     std::unique_ptr<ActionManager> action_manager;
@@ -125,6 +144,9 @@ public:
     float fixed_ang_vel_z = 0.0f;
     float fixed_command_duration = 0.0f;  // 0 means indefinite
     std::chrono::steady_clock::time_point fixed_command_start_time;
+
+private:
+    utils::VelocityCommandDamper velocity_command_damper_;
 };
 
 };

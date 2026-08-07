@@ -34,7 +34,7 @@ sudo apt install libboost-program-options-dev libyaml-cpp-dev libeigen3-dev libf
 - **fmt**: Formatting library.
 - **spdlog**: Logging library.
 - **onnxruntime**:
-   - x64 Linux: Download [onnxruntime-linux-x64-1.23.2.tgz](https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz) and extract it to the `deploy/thirdparty/` folder.
+   - x64 Linux (GPU): Download [onnxruntime-linux-x64-gpu-1.24.2.tgz](https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-linux-x64-gpu-1.24.2.tgz) and extract it to the `deploy/thirdparty/` folder.
    - Orin NX: Download [onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2) and extract it to the `deploy/thirdparty/` folder. Modify the ONNX link path in [{ROBOT}/CMakeLists.txt](deploy/robots/go2/CMakeLists.txt) by uncommenting the corresponding lines.
 
 > If you deploy on the Orin NX onboard computer, install the aarch64 version of onnxruntime. If you deploy from an x64 Linux computer through Ethernet, install the x64 version and adjust the ONNX link path accordingly.
@@ -143,3 +143,8 @@ You can also adjust PD parameters (`kp`, `kd`) and target joint angles (`qs`) fo
 The control program terminates if the angle between the `base_link` Z axis and gravity exceeds the threshold. The default value is 2 rad.
 
 Find `bad_orientation` in [State_RLBase.cpp](deploy/robots/go2/src/State_RLBase.cpp) and modify the second parameter to change the radian threshold.
+
+## License
+
+- Project-authored code is licensed under the [MIT License](LICENSE).
+- Code derived from [Unitree RL Lab](https://github.com/unitreerobotics/unitree_rl_lab) is licensed under the Apache License 2.0. See the [Unitree RL Lab license](docs/licenses/unitree-rl-lab-license.txt).

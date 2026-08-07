@@ -100,35 +100,7 @@ REGISTER_OBSERVATION(last_action)
 
 REGISTER_OBSERVATION(velocity_commands)
 {
-    std::vector<float> obs(3);
-
-    // Check if fixed command mode is active
-    if (env->fixed_command_enabled && env->fixed_command_active) {
-        obs[0] = env->fixed_lin_vel_x;
-        obs[1] = env->fixed_lin_vel_y;
-        obs[2] = env->fixed_ang_vel_z;
-        return obs;
-    }
-
-    auto & joystick = env->robot->data.joystick;
-    auto cfg = env->cfg["commands"]["base_velocity"]["ranges"];
-
-    obs[0] = joystick->ly();
-    obs[1] = -joystick->lx();
-    obs[2] = -joystick->rx();
-
-    auto scale_func = [&cfg](std::vector<float>& obs, int idx, const std::string& key) {
-        if (obs[idx] > 0) {
-            obs[idx] *= cfg[key][1].as<float>();
-        } else {
-            obs[idx] *= -cfg[key][0].as<float>();
-        }
-    };
-    scale_func(obs, 0, "lin_vel_x");
-    scale_func(obs, 1, "lin_vel_y");
-    scale_func(obs, 2, "ang_vel_z");
-
-    return obs;
+    return env->velocity_command();
 }
 
 REGISTER_OBSERVATION(gait_phase)
