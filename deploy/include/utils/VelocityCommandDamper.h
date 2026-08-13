@@ -2,8 +2,8 @@
 // All rights reserved.
 
 // Builds velocity commands from joystick or fixed-command inputs and applies
-// configurable speed-dependent first-order damping to vx. Lateral and yaw
-// commands remain unfiltered.
+// configurable speed-dependent first-order damping and acceleration limits to
+// vx. Lateral and yaw commands remain unfiltered.
 
 #pragma once
 
@@ -14,6 +14,7 @@
 #include <array>
 #include <cmath>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -97,6 +98,8 @@ private:
     void configure_damping(const YAML::Node& fsm_cfg)
     {
         enabled_ = false;
+        max_acceleration_ = std::numeric_limits<float>::infinity();
+        max_deceleration_ = std::numeric_limits<float>::infinity();
         speed_points_.clear();
         time_constants_.clear();
 
@@ -116,6 +119,8 @@ private:
 
         const auto speed_points = vx_cfg["speed_points"].as<std::vector<float>>();
         const auto time_constants = vx_cfg["time_constants"].as<std::vector<float>>();
+        max_acceleration_ = parse_rate_limit(vx_cfg, "max_acceleration");
+        max_deceleration_ = parse_rate_limit(vx_cfg, "max_deceleration");
         if (speed_points.size() < 2 || speed_points.size() != time_constants.size()) {
             throw std::invalid_argument(
                 "VelocityCommandDamper requires equally sized speed_points and time_constants with at least two entries");
@@ -150,6 +155,19 @@ private:
         return {values[0], values[1]};
     }
 
+    static float parse_rate_limit(const YAML::Node& vx_cfg, const char* key)
+    {
+        if (!vx_cfg[key]) {
+            return std::numeric_limits<float>::infinity();
+        }
+
+        const float value = vx_cfg[key].as<float>();
+        if (!std::isfinite(value) || value <= 0.0f) {
+            throw std::invalid_argument(std::string(key) + " must be finite and positive");
+        }
+        return value;
+    }
+
     static float scale_command(float command, const Range& range)
     {
         return command > 0.0f
@@ -173,13 +191,23 @@ private:
 
         const float reference_speed = std::max(std::fabs(vx_), std::fabs(target));
         const float time_constant = interpolate_time_constant(reference_speed);
-        if (time_constant == 0.0f) {
-            vx_ = target;
-            return vx_;
+        float damped_target = target;
+        if (time_constant > 0.0f) {
+            const float alpha = 1.0f - std::exp(-dt / time_constant);
+            damped_target = vx_ + alpha * (target - vx_);
         }
 
-        const float alpha = 1.0f - std::exp(-dt / time_constant);
-        vx_ += alpha * (target - vx_);
+        const bool has_rate_limit = std::isfinite(max_acceleration_)
+            || std::isfinite(max_deceleration_);
+        if (has_rate_limit && vx_ * damped_target < 0.0f) {
+            damped_target = 0.0f;
+        }
+
+        const float delta = damped_target - vx_;
+        const bool decelerating = vx_ * delta < 0.0f;
+        const float rate_limit = decelerating ? max_deceleration_ : max_acceleration_;
+        const float max_delta = rate_limit * dt;
+        vx_ += std::clamp(delta, -max_delta, max_delta);
         return vx_;
     }
 
@@ -204,6 +232,8 @@ private:
     bool enabled_ = false;
     bool has_command_ranges_ = false;
     float vx_ = 0.0f;
+    float max_acceleration_ = std::numeric_limits<float>::infinity();
+    float max_deceleration_ = std::numeric_limits<float>::infinity();
     unitree::common::UnitreeJoystick* joystick_ = nullptr;
     std::array<Range, 3> command_ranges_{};
     std::vector<float> command_{0.0f, 0.0f, 0.0f};

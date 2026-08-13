@@ -83,6 +83,8 @@ FSM:
       vx:
         speed_points: [0.0, 1.0, 2.0, 4.0]
         time_constants: [0.0, 0.0, 0.4, 0.6]
+        max_acceleration: 4.0  # m/s^2
+        max_deceleration: 3.0  # m/s^2
   Velocity_Left:
     transitions: 
       Passive: LT + B.on_pressed
