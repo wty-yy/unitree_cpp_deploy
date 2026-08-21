@@ -6,6 +6,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Boost REQUIRED COMPONENTS program_options)
 find_package(yaml-cpp REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc)
 
 include_directories(
   /usr/include/eigen3
@@ -16,11 +17,13 @@ include_directories(
   ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-x64-gpu-1.24.2/include
   ${PROJECT_SOURCE_DIR}/../../thirdparty/
   ${PROJECT_SOURCE_DIR}/../../include/
+  ${OpenCV_INCLUDE_DIRS}
 )
 
 link_libraries(
   unitree_sdk2 ddsc ddscxx rt pthread # dds
   libboost_program_options.a libyaml-cpp.a fmt
+  ${OpenCV_LIBS}
   # ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-aarch64-gpu-1.16.0/lib/libonnxruntime.so.1.16.0
   ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-x64-gpu-1.24.2/lib/libonnxruntime.so.1.24.2
 )

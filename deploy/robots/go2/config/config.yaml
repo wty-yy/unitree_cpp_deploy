@@ -92,7 +92,12 @@ FSM:
       Velocity_Up: start + up
       Velocity_Down: start + down
       Velocity_Right: start + right
-    policy_dir: ../../../logs/go2/go2_moe_cts_164k_0.6715
+    policy_dir: ../../../logs/go2/go2_rl_lab/depth/go2_climb_up_finetune_v0.2.5+climb7.4_28k
+    onnx_tensorrt: true
+    onnx_cuda: true
+    onnx_cuda_device: 0
+    logging: false
+    logging_dt: 0.02
   Velocity_Right:
     transitions: 
       Passive: LT + B.on_pressed

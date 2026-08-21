@@ -152,6 +152,14 @@ private:
         if (values.size() != 2) {
             throw std::invalid_argument(std::string("Velocity command range must contain two values: ") + key);
         }
+        if (!std::isfinite(values[0]) || !std::isfinite(values[1])) {
+            throw std::invalid_argument(std::string("Velocity command range must be finite: ") + key);
+        }
+        const bool disabled = values[0] == 0.0f && values[1] == 0.0f;
+        if (!disabled && (values[0] >= values[1] || values[0] > 0.0f || values[1] < 0.0f)) {
+            throw std::invalid_argument(
+                std::string("Velocity command range must span zero or be [0, 0]: ") + key);
+        }
         return {values[0], values[1]};
     }
 

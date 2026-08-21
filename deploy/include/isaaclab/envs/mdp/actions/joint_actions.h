@@ -69,6 +69,7 @@ public:
     void reset()
     {
         _raw_actions.assign(_action_dim, 0.0f);
+        _processed_actions = _offset;
     }
 
 protected:

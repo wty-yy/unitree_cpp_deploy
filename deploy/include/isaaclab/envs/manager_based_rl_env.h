@@ -13,7 +13,10 @@
 #include "utils/VelocityCommandDamper.h"
 #include <iostream>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <unordered_map>
 
 namespace isaaclab
 {
@@ -85,6 +88,7 @@ public:
         if(robot->data.motion_loader) {
             robot->data.motion_loader->reset(robot->data);
         }
+        if (alg) alg->reset();
         if (action_manager) action_manager->reset();
         if (observation_manager) observation_manager->reset();
     }
@@ -104,7 +108,14 @@ public:
         {
             throw std::runtime_error("ManagerBasedRLEnv::step requires observation_manager, action_manager and alg");
         }
+        observations_valid_ = true;
         auto obs = observation_manager->compute();
+        if (!observations_valid_) {
+            alg->reset();
+            action_manager->reset();
+            last_inference_results.clear();
+            return;
+        }
         
         last_inference_results = alg->forward(obs);
         
@@ -121,6 +132,31 @@ public:
     const std::vector<float>& velocity_command() const
     {
         return velocity_command_damper_.command();
+    }
+
+    void invalidate_observations()
+    {
+        observations_valid_ = false;
+    }
+
+    bool observations_valid() const
+    {
+        return observations_valid_;
+    }
+
+    template<typename Resource, typename Factory>
+    std::shared_ptr<Resource> observation_resource(
+        const std::string& key, Factory&& factory)
+    {
+        std::lock_guard<std::mutex> lock(observation_resources_mutex_);
+        const auto existing = observation_resources_.find(key);
+        if (existing != observation_resources_.end()) {
+            return std::static_pointer_cast<Resource>(existing->second);
+        }
+
+        auto resource = factory();
+        observation_resources_.emplace(key, resource);
+        return resource;
     }
 
     float step_dt;
@@ -147,6 +183,9 @@ public:
 
 private:
     utils::VelocityCommandDamper velocity_command_damper_;
+    std::mutex observation_resources_mutex_;
+    std::unordered_map<std::string, std::shared_ptr<void>> observation_resources_;
+    bool observations_valid_ = true;
 };
 
 };

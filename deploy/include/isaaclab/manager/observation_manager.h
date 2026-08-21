@@ -147,10 +147,10 @@ protected:
                 throw std::runtime_error("Observation term '" + term_name + "' is not registered.");
             }
 
-            if(!term_yaml_cfg["scale"].IsNull()) {
+            if(term_yaml_cfg["scale"] && !term_yaml_cfg["scale"].IsNull()) {
                 term_cfg.scale = term_yaml_cfg["scale"].as<std::vector<float>>();
             }
-            if(!term_yaml_cfg["clip"].IsNull()) {
+            if(term_yaml_cfg["clip"] && !term_yaml_cfg["clip"].IsNull()) {
                 term_cfg.clip = term_yaml_cfg["clip"].as<std::vector<float>>();
             }
             term_cfg.func = observations_map()[term_name];   

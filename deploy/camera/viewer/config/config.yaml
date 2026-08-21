@@ -1,0 +1,24 @@
+dds:
+  domain_id: 0
+  interface: "lo"
+  topic: "rt/front_depth_observation"
+  control_topic: "cpp_viewer/record_switch"
+  wireless_controller_topic: "rt/wirelesscontroller"
+  queue_length: 0
+
+stream:
+  width: 640
+  height: 360
+  encoding: "32FC1"
+  frame_rate: 15
+  stale_timeout: 1.0
+
+preview:
+  enabled: true
+  max_depth: 2.0
+
+recording:
+  output_dir: "videos"
+  codec: "libx265"
+  preset: "fast"
+  crf: 26

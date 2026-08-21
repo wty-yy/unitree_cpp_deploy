@@ -2,6 +2,7 @@
 #include "UdpSocket.h"
 #include "unitree_articulation.h"
 #include "isaaclab/envs/mdp/observations/observations.h"
+#include "isaaclab/envs/mdp/observations/depth_observations.h"
 #include "isaaclab/envs/mdp/actions/joint_actions.h"
 
 #include <cstdint>
@@ -52,7 +53,18 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
         std::make_shared<unitree::BaseArticulation<LowState_t::SharedPtr>>(FSMState::lowstate),
         cfg
     );
-    env->alg = std::make_unique<isaaclab::OrtRunner>(policy_dir / "exported" / "policy.onnx");
+    isaaclab::OrtRunner::Options ort_options;
+    ort_options.enable_tensorrt = cfg["onnx_tensorrt"]
+        ? cfg["onnx_tensorrt"].as<bool>()
+        : false;
+    ort_options.enable_cuda = cfg["onnx_cuda"]
+        ? cfg["onnx_cuda"].as<bool>()
+        : false;
+    ort_options.device_id = cfg["onnx_cuda_device"]
+        ? cfg["onnx_cuda_device"].as<int>()
+        : 0;
+    env->alg = std::make_unique<isaaclab::OrtRunner>(
+        (policy_dir / "exported" / "policy.onnx").string(), ort_options);
 
     this->registered_checks.emplace_back(
         std::make_pair(

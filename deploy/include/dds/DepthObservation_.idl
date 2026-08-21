@@ -1,0 +1,21 @@
+module unitree_sim
+{
+module msg
+{
+module dds_
+{
+struct DepthObservation_
+{
+  unsigned long long frame_sequence;
+  double sim_time;
+  string frame_id;
+  unsigned long width;
+  unsigned long height;
+  string encoding;
+  float near_clip;
+  float far_clip;
+  sequence<float> data;
+};
+};
+};
+};

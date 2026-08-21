@@ -1,0 +1,89 @@
+joint_ids_map: [3,4,5,0,1,2,9,10,11,6,7,8]
+step_dt: 0.02
+stiffness: [25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0]
+damping: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+default_joint_pos: [0.1, 0.8, -1.5, -0.1, 0.8, -1.5, 0.1, 1.0, -1.5, -0.1, 1.0, -1.5]
+commands:
+  base_velocity:
+    ranges:
+      lin_vel_x: [-1.0, 1.0]
+      lin_vel_y: [-1.0, 1.0]
+      # Match deploy_go2_depth.py joystick commands and preserve yaw sign.
+      ang_vel_z: [-1.0, 1.0]
+      heading: null
+actions:
+  JointPositionAction:
+    clip:
+    - [-100.0, 100.0]
+    - [-100.0, 100.0]
+    - [-100.0, 100.0]
+    - [-100.0, 100.0]
+    - [-100.0, 100.0]
+    - [-100.0, 100.0]
+    - [-100.0, 100.0]
+    - [-100.0, 100.0]
+    - [-100.0, 100.0]
+    - [-100.0, 100.0]
+    - [-100.0, 100.0]
+    - [-100.0, 100.0]
+    joint_names: [.*]
+    scale: [0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25]
+    offset: [0.1, 0.8, -1.5, -0.1, 0.8, -1.5, 0.1, 1.0, -1.5, -0.1, 1.0, -1.5]
+    joint_ids: null
+observations:
+  # The visual ONNX exporter maintains its own 10-frame history, so this
+  # group must provide exactly one 45-value proprioceptive frame.
+  single_obs:
+    base_ang_vel:
+      params: {}
+      clip: [-100, 100]
+      scale: [0.25, 0.25, 0.25]
+      history_length: 1
+    projected_gravity:
+      params: {}
+      clip: [-100, 100]
+      scale: [1.0, 1.0, 1.0]
+      history_length: 1
+    velocity_commands:
+      params: {command_name: base_velocity}
+      clip: [-100, 100]
+      scale: [1.0, 1.0, 1.0]
+      history_length: 1
+    joint_pos_rel:
+      params: {}
+      clip: [-100, 100]
+      scale: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+      history_length: 1
+    joint_vel_rel:
+      params: {}
+      clip: [-100, 100]
+      scale: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
+      history_length: 1
+    last_action:
+      params: {}
+      clip: [-100, 100]
+      scale: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+      history_length: 1
+
+  depth:
+    depth_image:
+      params:
+        topic: rt/front_depth_observation
+        encoding: 32FC1
+        # Process on the DDS receive thread. The SDK's extra length-1 callback
+        # queue stalls this large depth payload after its first sample.
+        queue_length: 0
+        stale_timeout: 0.5
+        fallback_value: 1.0
+        # Preserve the full camera FOV with one area resize, matching
+        # deploy_go2_depth.py: 640x360 -> 56x32 without cropping.
+        raw_width: 640
+        raw_height: 360
+        output_width: 56
+        output_height: 32
+        min_depth: 0.16
+        max_depth: 2.0
+        gaussian_kernel_size: 5
+        gaussian_sigma: 1.0
+      clip: [0.0, 1.0]
+      history_length: 1
