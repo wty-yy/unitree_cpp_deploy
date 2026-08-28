@@ -13,8 +13,8 @@ include_directories(
   /usr/local/include/ddscxx # dds
   /usr/local/include/iceoryx/v2.0.2 # dds
   include
-  # ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-aarch64-gpu-1.16.0/include
-  ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-x64-gpu-1.24.2/include
+  ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-aarch64-gpu-1.16.0/include
+  # ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-x64-gpu-1.24.2/include
   ${PROJECT_SOURCE_DIR}/../../thirdparty/
   ${PROJECT_SOURCE_DIR}/../../include/
   ${OpenCV_INCLUDE_DIRS}
@@ -24,8 +24,8 @@ link_libraries(
   unitree_sdk2 ddsc ddscxx rt pthread # dds
   libboost_program_options.a libyaml-cpp.a fmt
   ${OpenCV_LIBS}
-  # ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-aarch64-gpu-1.16.0/lib/libonnxruntime.so.1.16.0
-  ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-x64-gpu-1.24.2/lib/libonnxruntime.so.1.24.2
+  ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-aarch64-gpu-1.16.0/lib/libonnxruntime.so.1.16.0
+  # ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-x64-gpu-1.24.2/lib/libonnxruntime.so.1.24.2
 )
 
 file(GLOB_RECURSE ADD_SRC_LIST

@@ -18,6 +18,24 @@ Usage: ./deploy/camera/run.sh [--build]
 EOF
 }
 
+check_ffmpeg() {
+  local ffmpeg_bin
+  local encoders
+
+  if ! ffmpeg_bin="$(command -v ffmpeg)"; then
+    echo "FFmpeg not found. Install it before building: sudo apt install ffmpeg" >&2
+    exit 1
+  fi
+  if ! encoders="$("${ffmpeg_bin}" -hide_banner -encoders 2>&1)"; then
+    echo "Could not query FFmpeg encoders using ${ffmpeg_bin}." >&2
+    exit 1
+  fi
+  if ! grep -Eq '(^|[[:space:]])libx265([[:space:]]|$)' <<< "${encoders}"; then
+    echo "FFmpeg does not provide the required libx265 encoder." >&2
+    exit 1
+  fi
+}
+
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
@@ -57,6 +75,7 @@ if [[ $# -eq 1 ]]; then
 fi
 
 if [[ "${build}" == true ]]; then
+  check_ffmpeg
   cmake -S "${camera_dir}" -B "${build_dir}" -DCMAKE_BUILD_TYPE=Release
   cmake --build "${build_dir}" -j
 fi

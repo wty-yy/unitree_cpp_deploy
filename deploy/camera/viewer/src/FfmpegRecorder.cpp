@@ -73,6 +73,7 @@ void FfmpegRecorder::Start(
             "-pixel_format", "gray",
             "-video_size", video_size,
             "-framerate", frame_rate_string,
+            "-use_wallclock_as_timestamps", "1",
             "-i", "pipe:0",
             "-an",
             "-c:v", config_.codec,
@@ -80,6 +81,7 @@ void FfmpegRecorder::Start(
             "-crf", crf_string,
             "-x265-params", "log-level=error",
             "-pix_fmt", "yuv420p",
+            "-vsync", "vfr",
             output_path_.string(),
         };
         std::vector<char*> argv;

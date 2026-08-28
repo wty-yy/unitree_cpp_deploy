@@ -47,6 +47,7 @@ public:
         bool enable_tensorrt = false;
         bool enable_cuda = false;
         int device_id = 0;
+        std::string tensorrt_engine_cache_path;
     };
 
     explicit OrtRunner(std::string model_path)
@@ -326,6 +327,15 @@ private:
                 try {
                     OrtTensorRTProviderOptions tensorrt_options{};
                     tensorrt_options.device_id = options.device_id;
+                    tensorrt_options.trt_max_partition_iterations = 1000;
+                    tensorrt_options.trt_min_subgraph_size = 1;
+                    tensorrt_options.trt_max_workspace_size = 1ULL << 30;
+                    tensorrt_options.trt_engine_cache_enable =
+                        options.tensorrt_engine_cache_path.empty() ? 0 : 1;
+                    tensorrt_options.trt_engine_cache_path =
+                        options.tensorrt_engine_cache_path.empty()
+                            ? nullptr
+                            : options.tensorrt_engine_cache_path.c_str();
                     candidate_options.AppendExecutionProvider_TensorRT(tensorrt_options);
                 } catch (const Ort::Exception& error) {
                     last_error = error.what();

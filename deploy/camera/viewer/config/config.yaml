@@ -1,6 +1,6 @@
 dds:
   domain_id: 0
-  interface: "lo"
+  interface: "eth0"
   topic: "rt/front_depth_observation"
   control_topic: "cpp_viewer/record_switch"
   wireless_controller_topic: "rt/wirelesscontroller"

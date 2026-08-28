@@ -11,7 +11,30 @@ find_package(OpenCV REQUIRED COMPONENTS core highgui)
 find_package(Threads REQUIRED)
 find_package(unitree_sdk2 REQUIRED)
 find_package(yaml-cpp REQUIRED)
-find_program(FFMPEG_EXECUTABLE ffmpeg REQUIRED)
+find_program(FFMPEG_EXECUTABLE NAMES ffmpeg)
+if(NOT FFMPEG_EXECUTABLE)
+  message(FATAL_ERROR
+    "FFmpeg executable not found. Install it with: sudo apt install ffmpeg"
+  )
+endif()
+
+execute_process(
+  COMMAND "${FFMPEG_EXECUTABLE}" -hide_banner -encoders
+  RESULT_VARIABLE FFMPEG_ENCODERS_RESULT
+  OUTPUT_VARIABLE FFMPEG_ENCODERS_OUTPUT
+  ERROR_VARIABLE FFMPEG_ENCODERS_ERROR
+)
+if(NOT FFMPEG_ENCODERS_RESULT EQUAL 0)
+  message(FATAL_ERROR
+    "Could not query encoders from ${FFMPEG_EXECUTABLE}: ${FFMPEG_ENCODERS_ERROR}"
+  )
+endif()
+if(NOT FFMPEG_ENCODERS_OUTPUT MATCHES "libx265")
+  message(FATAL_ERROR
+    "FFmpeg at ${FFMPEG_EXECUTABLE} does not provide the required libx265 encoder"
+  )
+endif()
+message(STATUS "Found FFmpeg with libx265: ${FFMPEG_EXECUTABLE}")
 
 set(DEPLOY_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../..")
 if(NOT DEFINED DEPLOY_CAMERA_SOURCE_DIR)

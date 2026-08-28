@@ -77,7 +77,7 @@ FSM:
       Velocity_Left: start + left
       Velocity_Right: start + right
     # policy_dir: ../../../logs/go2/go2_moe_cts_flat_max4.5_71k
-    policy_dir: ../../../logs/go2/go2_rl_lab/v0.1.8_fast_flat_40k  # fast model
+    policy_dir: ../../../logs/go2/go2_rl_lab/go2_fast_flat_v0.2.5_50k  # fast model
     velocity_command_damping:
       enabled: true
       vx:
@@ -96,6 +96,7 @@ FSM:
     onnx_tensorrt: true
     onnx_cuda: true
     onnx_cuda_device: 0
+    onnx_trt_cache_dir: trt_cache
     logging: false
     logging_dt: 0.02
   Velocity_Right:

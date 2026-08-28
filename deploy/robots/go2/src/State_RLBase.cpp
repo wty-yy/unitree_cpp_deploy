@@ -63,6 +63,22 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
     ort_options.device_id = cfg["onnx_cuda_device"]
         ? cfg["onnx_cuda_device"].as<int>()
         : 0;
+    if (ort_options.enable_tensorrt) {
+        const std::string cache_dir = cfg["onnx_trt_cache_dir"]
+            ? cfg["onnx_trt_cache_dir"].as<std::string>()
+            : "trt_cache";
+        if (!cache_dir.empty()) {
+            std::filesystem::path cache_path = cache_dir;
+            if (cache_path.is_relative()) {
+                cache_path = policy_dir / cache_path;
+            }
+            std::filesystem::create_directories(cache_path);
+            ort_options.tensorrt_engine_cache_path = cache_path.string();
+            spdlog::info(
+                "TensorRT engine cache enabled: {}",
+                ort_options.tensorrt_engine_cache_path);
+        }
+    }
     env->alg = std::make_unique<isaaclab::OrtRunner>(
         (policy_dir / "exported" / "policy.onnx").string(), ort_options);
 
