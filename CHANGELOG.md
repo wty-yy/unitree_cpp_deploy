@@ -1,7 +1,7 @@
 # CHANGELOG
 
 ## v0.6.8 2026-09-12
-1. 新增 [TowardCommand.h](deploy/include/utils/TowardCommand.h)，支持 `climb_toward` 模型的 `[direction_x, direction_y, desired_speed]` 指令：左摇杆方向、右摇杆速度，由模型 `params/deploy.yaml` 的 `commands.base_velocity.toward_command`（`enabled`/`max_speed`/`deadzone`）配置，`manager_based_rl_env.h` 在 `TowardCommand` 与 `VelocityCommandDamper` 间自动选择
+1. 新增 [TowardCommand.h](deploy/include/utils/TowardCommand.h)，支持 `climb_toward` 模型的 `[direction_x, direction_y, desired_speed]` 指令：左摇杆方向、右摇杆速度，由模型 `params/deploy.yaml` 的 `commands.base_velocity.toward_command`（`enabled`/`max_speed`/`deadzone`/`direction_angle_range`）配置，`manager_based_rl_env.h` 在 `TowardCommand` 与 `VelocityCommandDamper` 间自动选择
 2. Go2 `Velocity_Left` 切换为 `go2_climb_toward_finetune_2.3.3` 爬越模型，`Velocity_Right` 切换为 `go2_mixed_moe_cts_v0.2.8_36.5k`
 3. `State_RLBase` 日志新增 `cmd_obs`，记录策略实际接收的指令向量
 4. ONNX Runtime 执行 provider 日志只显示主 provider（`TensorRT`/`CUDA`/`CPU`），删除回退链显示

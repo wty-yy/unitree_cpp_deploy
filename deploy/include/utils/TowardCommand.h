@@ -10,6 +10,7 @@
 //         enabled: true
 //         max_speed: 1.0
 //         deadzone: 0.1
+//         direction_angle_range: [-0.785398, 0.785398]  # rad, defaults to [-pi, pi]
 
 #pragma once
 
@@ -37,6 +38,7 @@ public:
         enabled_ = false;
         max_speed_ = 1.0f;
         deadzone_ = 0.1f;
+        direction_angle_range_ = {-static_cast<float>(M_PI), static_cast<float>(M_PI)};
 
         const auto commands_cfg = policy_cfg["commands"];
         const auto base_velocity_cfg = commands_cfg
@@ -65,10 +67,32 @@ public:
                     "must be finite and non-negative");
             }
         }
+        if (toward_cfg["direction_angle_range"]) {
+            const auto angle_range =
+                toward_cfg["direction_angle_range"].as<std::vector<float>>();
+            if (angle_range.size() != 2) {
+                throw std::invalid_argument(
+                    "commands.base_velocity.toward_command.direction_angle_range "
+                    "must contain two values");
+            }
+            if (!std::isfinite(angle_range[0]) || !std::isfinite(angle_range[1])) {
+                throw std::invalid_argument(
+                    "commands.base_velocity.toward_command.direction_angle_range "
+                    "must be finite");
+            }
+            if (angle_range[0] > angle_range[1]) {
+                throw std::invalid_argument(
+                    "commands.base_velocity.toward_command.direction_angle_range "
+                    "lower bound must not exceed upper bound");
+            }
+            direction_angle_range_ = {angle_range[0], angle_range[1]};
+        }
         enabled_ = true;
         spdlog::info(
-            "Toward command enabled: left stick unit direction, "
-            "right stick forward speed up to {:.2f} m/s (deadzone {:.2f})",
+            "Toward command enabled: left stick unit direction clamped to "
+            "[{:.3f}, {:.3f}] rad, right stick forward speed up to {:.2f} m/s "
+            "(deadzone {:.2f})",
+            direction_angle_range_[0], direction_angle_range_[1],
             max_speed_, deadzone_);
     }
 
@@ -109,8 +133,11 @@ public:
         if (std::fabs(forward) < deadzone_) {
             forward = 0.0f;
         }
-        command_[0] = direction_x / direction_norm;
-        command_[1] = direction_y / direction_norm;
+        const float angle = std::clamp(
+            std::atan2(direction_y, direction_x),
+            direction_angle_range_[0], direction_angle_range_[1]);
+        command_[0] = std::cos(angle);
+        command_[1] = std::sin(angle);
         command_[2] = std::clamp(forward, 0.0f, 1.0f) * max_speed_;
     }
 
@@ -128,6 +155,8 @@ private:
     bool enabled_ = false;
     float max_speed_ = 1.0f;
     float deadzone_ = 0.1f;
+    std::array<float, 2> direction_angle_range_{
+        -static_cast<float>(M_PI), static_cast<float>(M_PI)};
     unitree::common::UnitreeJoystick* joystick_ = nullptr;
     std::vector<float> command_{0.0f, 0.0f, 0.0f};
 };
