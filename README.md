@@ -19,6 +19,16 @@ unitree_rl_lab/
 └── README.md
 ```
 
+## Model Weights
+
+Policy weights under `logs/` (`*.onnx`, `*.pt`) are tracked with Git LFS. If these files are only a few hundred bytes (pointer files), fetch the real weights:
+
+```bash
+sudo apt install git-lfs  # once
+git lfs install           # once
+git lfs pull              # download weights
+```
+
 ## Dependencies
 
 Before compiling and running, ensure the following dependencies are installed in the development environment (Orin NX):

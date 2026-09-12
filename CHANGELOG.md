@@ -1,32 +1,41 @@
-# UPDATE
-## 20260821 v0.6.7
+# CHANGELOG
+
+## v0.6.8 2026-09-12
+1. 新增 [TowardCommand.h](deploy/include/utils/TowardCommand.h)，支持 `climb_toward` 模型的 `[direction_x, direction_y, desired_speed]` 指令：左摇杆方向、右摇杆速度，由模型 `params/deploy.yaml` 的 `commands.base_velocity.toward_command`（`enabled`/`max_speed`/`deadzone`）配置，`manager_based_rl_env.h` 在 `TowardCommand` 与 `VelocityCommandDamper` 间自动选择
+2. Go2 `Velocity_Left` 切换为 `go2_climb_toward_finetune_2.3.3` 爬越模型，`Velocity_Right` 切换为 `go2_mixed_moe_cts_v0.2.8_36.5k`
+3. `State_RLBase` 日志新增 `cmd_obs`，记录策略实际接收的指令向量
+4. ONNX Runtime 执行 provider 日志只显示主 provider（`TensorRT`/`CUDA`/`CPU`），删除回退链显示
+5. 权重文件改用 Git LFS 管理（`.gitattributes` 跟踪 `*.onnx`/`*.pt`），README 增加 `git lfs pull` 拉取说明
+6. 移除源码中新增的自有 License 头注，Unitree 派生文件保留原 Apache 头注；更新 `LICENSE` 顶层版权为 `Copyright (c) 2026 Tianyang Wu`
+7. 将 `UPDATE.md` 重命名为 `CHANGELOG.md`，新增 `AGENTS.md` 项目约定说明
+
+## v0.6.7 2026-08-21
 1. 新增`depth`dds输入，支持`cnn+rnn`网络
 2. 新增`camera/`项目，包含`d435i`深度相机的dds发布和viewer，支持H.265录制和灰度预览
 
-## 20260807 v0.6.6
+## v0.6.6 2026-08-07
 1. 新增`go2_moe_cts_v4.2_176k_0.6984`通用模型，`v0.1.8_fast_flat_40k`快速平地模型更稳定的步态
 2. 新增`VelocityCommandDamper`对高速移动的指令添加阻尼，避免高速指令的突然切换导致失控
 
-## 20260629 v0.6.5
+## v0.6.5 2026-06-29
 **新增L2+A缓慢蹲下的功能**
 1. 重新命名类`State_FixStand`为`State_Fix`，用于不同的固定姿态转换，新增模型切换到`L2+A`，从缓慢蹲下到Passive模式，避免直接Passive导致侧向倒下问题
 
-## 20260628 v0.6.4
+## v0.6.4 2026-06-28
 **新增UDP发送joint pos功能**
 1. 在[config.yaml](deploy/robots/go2/config/config.yaml)中打开`joint_pos_udp.enabled`字段, 并设置UDP发送的IP和端口, python接收用例为[udp_test.py](scripts/udp_test.py)
 
-## 20260429 v0.6.3
+## v0.6.3 2026-04-29
 **新增BeyondMimic***
 1. 默认是一个自己用kimodo生成的dailylife_back_2_3向后走的模型+轨迹，使用方法参考[config.yaml](deploy/robots/g1/config/config.yaml)中的BeyondMimic配置，通过`RT + A.on_pressed`切换到该模型
 
-## 20260331 v0.6.2
+## v0.6.2 2026-03-31
 **新增Go2 go2_moe_cts_flat_max4.5_71k模型**
 1. 通过Start+Down切换到该模型，删掉原先的模型，新模型也是开启自碰撞后训练，移动时双脚不容易打到对方
-## 20260326 v0.6.1
+## v0.6.1 2026-03-26
 **新增Go2 go2_moe_cts_self_103.5k_0.6669模型**
 1. 通过Start+Left切换到该模型，通过开启自碰撞后训练，移动时不易绊脚
-## 20260316
-### v0.6
+## v0.6 2026-03-16
 **新增OmniXtreme模型**
 1. 新增 [State_OmniXtreme.h](deploy/robots/g1/include/State_OmniXtreme.h) / [State_OmniXtreme.cpp](deploy/robots/g1/src/State_OmniXtreme.cpp):
     - 接入 G1 OmniXtreme base policy + residual policy + FK ONNX 推理
@@ -43,12 +52,12 @@
     - 轨迹 `body_quat_w` 与 FK `rot` 输出按 `wxyz` 解释
     - raw action 不做额外 `[-1, 1]` 裁剪，动作保护依赖关节限位与 envelope
     - 进入状态前机器人姿态应尽量接近目标轨迹首帧
-### v0.5.1
+## v0.5.1 2026-03-16
 **新增G1 Loco v0.0.5.1模型，降低踏地的声音**
 1. 删除之前的v0.0.5运控模型，新增v0.0.5.1，并在配置中加入对BFM-Zero支持，在摔倒后可以通过BFM重新站立后进入运控
 2. 切换运控RB+Y，切换BFM RT+Y
 
-## 20260305 v0.5
+## v0.5 2026-03-05
 **新增G1 BFM-Zero部署支持Onnxruntime CUDA加速**
 1. 新增 [State_BFM.h](deploy/robots/g1/include/State_BFM.h) / [State_BFM.cpp](deploy/robots/g1/src/State_BFM.cpp):
     - 支持 G1 BFM-Zero 三种任务模式: `goal` / `reward` / `tracking`
@@ -69,7 +78,7 @@
 5. 文档更新:
     - 完善 [docs/g1_setup_zh.md](docs/g1_setup_zh.md) 的 G1 BFM 使用方法与配置说明
 
-## 20260301 v0.4
+## v0.4 2026-03-01
 **重构 FSM 框架: 从硬编码转为 YAML 配置驱动，支持声明式状态注册和跳转**
 
 1. [BaseState.h](deploy/include/FSM/BaseState.h):
@@ -95,7 +104,7 @@
     - `config.yaml` 新增 `_` 节声明状态和 `transitions` 节定义跳转条件
 7. 详细配置使用方法见 [docs/robot_params.md](docs/robot_params.md)
 
-## 20260216 v0.3
+## v0.3 2026-02-16
 **加入g1人形机器人适配更新，后续上传稳定运控模型**
 1. [manager_term_cfg.h](deploy/include/isaaclab/manager/manager_term_cfg.h):
     - 新增 `get(int n)` 方法返回单帧数据, 修复 gym-style history 叠帧 bug (原 `get()` 返回全帧拼接, 外层再循环导致 5×5 膨胀)
@@ -117,11 +126,11 @@
     - `gait_phase` 改为从 `params["period"]` 读取周期
 5. 新增[Observation Group](./docs/obs_group.md)使用说明
 
-## 20260211 v0.2.2
+## v0.2.2 2026-02-11
 1. SportModeState 高层估计，真机上没有用删掉
-## 20260210 v0.2.1
+## v0.2.1 2026-02-10
 1. 修改moe模型命名为go2_moe_cts_137k_0.6739
-## 20260125 v0.2
+## v0.2 2026-01-25
 1. 添加固定指令执行功能:
     - 在[config.yaml](deploy/robots/go2/config/config.yaml)的`fixed_command.enabled`字段打开该功能, 并设置固定指令值
     - 在真机上通过按键组合`L2 + Y`启动固定指令执行，并再次按下该组合键停止执行固定指令
@@ -132,7 +141,7 @@
     - Velocity_Left: 通过按键组合`Start + Left`切换到该模型, 使用`policy_dir_left`中的模型文件
     - Velocity_Right: 通过按键组合`Start + Right`切换到该模型, 使用`policy_dir_right`中的模型文件
 3. 进入模型方法: L2 + A站立, start + 方向键选择模型, 随时可start + 方向键切换模型, L2 + B进入阻尼模式
-## 20251208 v0.1
+## v0.1 2025-12-08
 1. 新增运行时数据记录功能:
     - 在[config.yaml](deploy/robots/go2/config/config.yaml)的`logging`打开该功能, 及记录频率`logging_dt`
     - 实现 `DataLogger` 类, 支持CSV格式数据保存存储在 `{policy_dir}/logs` 下, `State_RLBase` 中集成日志记录, 涵盖:

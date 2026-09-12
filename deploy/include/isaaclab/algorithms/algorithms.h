@@ -254,14 +254,13 @@ private:
 
     static std::string candidate_name(const ProviderCandidate& candidate)
     {
-        if (candidate.tensorrt && candidate.cuda) {
-            return "TensorRT -> CUDA -> CPU";
-        }
+        // Primary execution provider; ONNX Runtime falls back to CPU for nodes
+        // the primary cannot execute.
         if (candidate.tensorrt) {
-            return "TensorRT -> CPU";
+            return "TensorRT";
         }
         if (candidate.cuda) {
-            return "CUDA -> CPU";
+            return "CUDA";
         }
         return "CPU";
     }
@@ -368,7 +367,7 @@ private:
                     env, model_path.c_str(), candidate_options);
                 execution_provider_ = name;
                 spdlog::info(
-                    "Loaded ONNX model {} with execution providers: {}",
+                    "Loaded ONNX model {} with execution provider: {}",
                     model_path, execution_provider_);
                 return;
             } catch (const Ort::Exception& error) {

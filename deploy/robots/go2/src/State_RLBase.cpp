@@ -282,6 +282,9 @@ void State_RLBase::run()
             logger->add("cmd_ns_1", -lowstate->joystick.lx());
             logger->add("cmd_ns_2", -lowstate->joystick.rx());
 
+            // Command vector fed to the policy (toward: direction + speed)
+            logger->add("cmd_obs", env->velocity_command());
+
             // Fixed command (log zeros when inactive)
             float fixed_0 = 0.0f;
             float fixed_1 = 0.0f;

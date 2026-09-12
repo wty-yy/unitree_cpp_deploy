@@ -11,6 +11,8 @@
 #include "isaaclab/assets/articulation/articulation.h"
 #include "isaaclab/algorithms/algorithms.h"
 #include "utils/VelocityCommandDamper.h"
+#include "utils/TowardCommand.h"
+#include <array>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -63,6 +65,7 @@ public:
 
         robot->update();
         velocity_command_damper_.configure(this->policy_cfg, fsm_cfg, robot->data.joystick);
+        toward_command_.configure(this->policy_cfg, robot->data.joystick);
 
         // load managers
         if (policy_cfg["actions"])
@@ -81,10 +84,8 @@ public:
         episode_length = 0;
         robot->update();
         velocity_command_damper_.reset();
-        velocity_command_damper_.update(
-            step_dt,
-            fixed_command_enabled && fixed_command_active,
-            {fixed_lin_vel_x, fixed_lin_vel_y, fixed_ang_vel_z});
+        toward_command_.reset();
+        update_velocity_command();
         if(robot->data.motion_loader) {
             robot->data.motion_loader->reset(robot->data);
         }
@@ -97,10 +98,7 @@ public:
     {
         episode_length += 1;
         robot->update();
-        velocity_command_damper_.update(
-            step_dt,
-            fixed_command_enabled && fixed_command_active,
-            {fixed_lin_vel_x, fixed_lin_vel_y, fixed_ang_vel_z});
+        update_velocity_command();
         if(robot->data.motion_loader) {
             robot->data.motion_loader->update(episode_length * step_dt);
         }
@@ -131,7 +129,9 @@ public:
 
     const std::vector<float>& velocity_command() const
     {
-        return velocity_command_damper_.command();
+        return toward_command_.enabled()
+            ? toward_command_.command()
+            : velocity_command_damper_.command();
     }
 
     void invalidate_observations()
@@ -182,7 +182,20 @@ public:
     std::chrono::steady_clock::time_point fixed_command_start_time;
 
 private:
+    void update_velocity_command()
+    {
+        const bool use_fixed_command = fixed_command_enabled && fixed_command_active;
+        const std::array<float, 3> fixed_command{
+            fixed_lin_vel_x, fixed_lin_vel_y, fixed_ang_vel_z};
+        if (toward_command_.enabled()) {
+            toward_command_.update(use_fixed_command, fixed_command);
+        } else {
+            velocity_command_damper_.update(step_dt, use_fixed_command, fixed_command);
+        }
+    }
+
     utils::VelocityCommandDamper velocity_command_damper_;
+    utils::TowardCommand toward_command_;
     std::mutex observation_resources_mutex_;
     std::unordered_map<std::string, std::shared_ptr<void>> observation_resources_;
     bool observations_valid_ = true;

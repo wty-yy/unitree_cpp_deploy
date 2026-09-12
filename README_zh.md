@@ -19,6 +19,16 @@ unitree_rl_lab/
 └── README.md
 ```
 
+## 模型权重
+
+`logs/` 下的策略权重 (`*.onnx`、`*.pt`) 使用 Git LFS 存储。若这些文件仅有几百字节 (指针文件)，需拉取真实权重：
+
+```bash
+sudo apt install git-lfs  # 只需执行一次
+git lfs install           # 只需执行一次
+git lfs pull              # 下载权重
+```
+
 ## 依赖项
 
 在编译和运行之前，请确保开发环境 (Orin NX) 已安装以下依赖项：
