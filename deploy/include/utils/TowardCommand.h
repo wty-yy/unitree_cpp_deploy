@@ -1,14 +1,18 @@
-// Builds toward commands from the joystick for the climb-toward policy, which
-// consumes [direction_x, direction_y, desired_speed]. The left stick gives a
-// unit direction in the body frame and the right stick forward deflection
-// gives the desired speed, matching deploy_go2_depth_toward.py.
+// Builds toward commands from the joystick for the flat-toward policy, which
+// consumes [direction_x, direction_y, desired_speed]. The left stick selects an
+// absolute world-frame heading (up = world +X, left = world +Y) and the right
+// stick forward deflection gives the desired speed, matching
+// deploy_go2_toward.py. The commanded direction is that heading expressed in the
+// base frame, [cos(psi_w - yaw), sin(psi_w - yaw)], which a real robot builds
+// from its heading estimate. A centered left stick keeps the last commanded
+// heading so the robot turns in place instead of drifting.
 //
 // Enable it from the model's params/deploy.yaml:
 //   commands:
 //     base_velocity:
 //       toward_command:
 //         enabled: true
-//         max_speed: 1.0
+//         max_speed: 2.0
 //         deadzone: 0.1
 //         direction_angle_range: [-0.785398, 0.785398]  # rad, defaults to [-pi, pi]
 
@@ -21,6 +25,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -36,7 +41,7 @@ public:
     {
         joystick_ = joystick;
         enabled_ = false;
-        max_speed_ = 1.0f;
+        max_speed_ = 2.0f;
         deadzone_ = 0.1f;
         direction_angle_range_ = {-static_cast<float>(M_PI), static_cast<float>(M_PI)};
 
@@ -89,7 +94,7 @@ public:
         }
         enabled_ = true;
         spdlog::info(
-            "Toward command enabled: left stick unit direction clamped to "
+            "Toward command enabled: left stick world heading clamped to "
             "[{:.3f}, {:.3f}] rad, right stick forward speed up to {:.2f} m/s "
             "(deadzone {:.2f})",
             direction_angle_range_[0], direction_angle_range_[1],
@@ -101,7 +106,10 @@ public:
         return enabled_;
     }
 
-    void update(bool use_fixed_command, const std::array<float, 3>& fixed_command)
+    void update(
+        bool use_fixed_command,
+        const std::array<float, 3>& fixed_command,
+        float root_heading_w)
     {
         if (use_fixed_command) {
             command_.assign(fixed_command.begin(), fixed_command.end());
@@ -112,37 +120,33 @@ public:
             throw std::runtime_error("TowardCommand joystick is not configured");
         }
 
-        float direction_x = joystick_->ly();
-        float direction_y = -joystick_->lx();
-        if (std::fabs(direction_x) < deadzone_) {
-            direction_x = 0.0f;
+        // Unitree remote: ly is forward-positive, lx is right-positive.
+        const float forward = joystick_->ly();
+        const float left = -joystick_->lx();
+        if (std::hypot(forward, left) >= deadzone_) {
+            world_heading_ = std::atan2(left, forward);
         }
-        if (std::fabs(direction_y) < deadzone_) {
-            direction_y = 0.0f;
-        }
-
-        const float direction_norm = std::sqrt(
-            direction_x * direction_x + direction_y * direction_y);
-        if (direction_norm < 1.0e-6f) {
-            // No direction: hold still rather than emit an undefined bearing.
-            command_.assign(3, 0.0f);
-            return;
+        if (!world_heading_) {
+            // Until the stick picks a bearing, hold the current heading.
+            world_heading_ = root_heading_w;
         }
 
-        float forward = joystick_->ry();
-        if (std::fabs(forward) < deadzone_) {
-            forward = 0.0f;
+        float speed = joystick_->ry();
+        if (std::fabs(speed) < deadzone_) {
+            speed = 0.0f;
         }
-        const float angle = std::clamp(
-            std::atan2(direction_y, direction_x),
+
+        const float heading_error = std::clamp(
+            wrap_to_pi(*world_heading_ - root_heading_w),
             direction_angle_range_[0], direction_angle_range_[1]);
-        command_[0] = std::cos(angle);
-        command_[1] = std::sin(angle);
-        command_[2] = std::clamp(forward, 0.0f, 1.0f) * max_speed_;
+        command_[0] = std::cos(heading_error);
+        command_[1] = std::sin(heading_error);
+        command_[2] = std::clamp(speed, 0.0f, 1.0f) * max_speed_;
     }
 
     void reset()
     {
+        world_heading_.reset();
         command_.assign(3, 0.0f);
     }
 
@@ -152,12 +156,18 @@ public:
     }
 
 private:
+    static float wrap_to_pi(float angle)
+    {
+        return std::atan2(std::sin(angle), std::cos(angle));
+    }
+
     bool enabled_ = false;
-    float max_speed_ = 1.0f;
+    float max_speed_ = 2.0f;
     float deadzone_ = 0.1f;
     std::array<float, 2> direction_angle_range_{
         -static_cast<float>(M_PI), static_cast<float>(M_PI)};
     unitree::common::UnitreeJoystick* joystick_ = nullptr;
+    std::optional<float> world_heading_;
     std::vector<float> command_{0.0f, 0.0f, 0.0f};
 };
 

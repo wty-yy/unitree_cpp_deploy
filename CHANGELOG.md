@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v0.6.9 2026-09-15
+1. `TowardCommand` 手柄映射由基座系方向改为世界系朝向：左摇杆上=world +X、左=world +Y（`lx` 右正取负），输出基座系朝向误差 `[cos(psi_w - yaw), sin(psi_w - yaw)]`，摇杆回中保持上次朝向，`max_speed` 默认 `2.0`
+2. `manager_based_rl_env.h` 新增 `root_heading_w`，将 IMU yaw 传入 `TowardCommand::update`
+3. Go2 `Velocity_Left` 切换为 `go2_flat_toward_tt2.2`：新增 `logs/go2/go2_rl_lab/toward_cmd/go2_flat_toward_tt2.2` 权重，`params/deploy.yaml` 观测改为单组 `obs`（6 项 × `history_length: 10`，term-major 最旧帧在前）对齐无状态 ONNX `obs [1,450]`，删除 `depth` 组，`toward_command.max_speed: 2.0`
+
 ## v0.6.8 2026-09-12
 1. 新增 [TowardCommand.h](deploy/include/utils/TowardCommand.h)，支持 `climb_toward` 模型的 `[direction_x, direction_y, desired_speed]` 指令：左摇杆方向、右摇杆速度，由模型 `params/deploy.yaml` 的 `commands.base_velocity.toward_command`（`enabled`/`max_speed`/`deadzone`/`direction_angle_range`）配置，`manager_based_rl_env.h` 在 `TowardCommand` 与 `VelocityCommandDamper` 间自动选择
 2. Go2 `Velocity_Left` 切换为 `go2_climb_toward_finetune_2.3.3` 爬越模型，`Velocity_Right` 切换为 `go2_mixed_moe_cts_v0.2.8_36.5k`

@@ -13,6 +13,7 @@
 #include "utils/VelocityCommandDamper.h"
 #include "utils/TowardCommand.h"
 #include <array>
+#include <cmath>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -182,13 +183,22 @@ public:
     std::chrono::steady_clock::time_point fixed_command_start_time;
 
 private:
+    static float root_heading_w(const Eigen::Quaternionf& quat)
+    {
+        return std::atan2(
+            2.0f * (quat.w() * quat.z() + quat.x() * quat.y()),
+            1.0f - 2.0f * (quat.y() * quat.y() + quat.z() * quat.z()));
+    }
+
     void update_velocity_command()
     {
         const bool use_fixed_command = fixed_command_enabled && fixed_command_active;
         const std::array<float, 3> fixed_command{
             fixed_lin_vel_x, fixed_lin_vel_y, fixed_ang_vel_z};
         if (toward_command_.enabled()) {
-            toward_command_.update(use_fixed_command, fixed_command);
+            toward_command_.update(
+                use_fixed_command, fixed_command,
+                root_heading_w(robot->data.root_quat_w));
         } else {
             velocity_command_damper_.update(step_dt, use_fixed_command, fixed_command);
         }
