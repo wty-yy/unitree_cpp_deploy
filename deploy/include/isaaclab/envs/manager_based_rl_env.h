@@ -85,7 +85,7 @@ public:
         episode_length = 0;
         robot->update();
         velocity_command_damper_.reset();
-        toward_command_.reset();
+        toward_command_.reset(root_heading_w(robot->data.root_quat_w));
         update_velocity_command();
         if(robot->data.motion_loader) {
             robot->data.motion_loader->reset(robot->data);
@@ -198,7 +198,7 @@ private:
         if (toward_command_.enabled()) {
             toward_command_.update(
                 use_fixed_command, fixed_command,
-                root_heading_w(robot->data.root_quat_w));
+                root_heading_w(robot->data.root_quat_w), step_dt);
         } else {
             velocity_command_damper_.update(step_dt, use_fixed_command, fixed_command);
         }

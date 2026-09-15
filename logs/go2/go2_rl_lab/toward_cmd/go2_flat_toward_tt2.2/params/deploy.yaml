@@ -6,13 +6,15 @@ default_joint_pos: [0.1, 0.8, -1.5, -0.1, 0.8, -1.5, 0.1, 1.0, -1.5, -0.1, 1.0, 
 commands:
   base_velocity:
     # The flat-toward policy consumes [direction_x, direction_y, desired_speed]:
-    # the left stick selects a world-frame heading (up = world +X, left = world +Y)
-    # and the right stick forward deflection gives the desired speed. The command
-    # is that heading expressed in the base frame (deploy_go2_toward.py).
+    # the left stick forward deflection directly gives the desired linear speed
+    # and the desired world yaw is the world +X base trimmed by the right stick
+    # left/right at yaw_trim_rate rad/s, so steering is gradual; the command is
+    # that yaw expressed in the base frame (deploy_go2_toward.py).
     toward_command:
       enabled: true
       max_speed: 2.0
       deadzone: 0.1
+      yaw_trim_rate: 2.0  # rad/s at full right-stick deflection
 actions:
   JointPositionAction:
     clip:

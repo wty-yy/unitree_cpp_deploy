@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v0.6.9.post1 2026-09-15
+1. `TowardCommand` 手柄映射改为左摇杆前后=期望线速度（`max_speed` 上限，回拉为零）、右摇杆左右=期望世界 yaw 微调（`yaw_trim_rate` rad/s 与摇杆偏移成比例，松手后保持），`update` 新增 `dt` 参数
+2. 期望 yaw 在 FSM 切入状态时初始化为当前 IMU yaw：`TowardCommand::reset(root_heading_w)` 取 `manager_based_rl_env.h` 的 `root_heading_w`，避免切入瞬间转向 world +X
+3. `go2_flat_toward_tt2.2/params/deploy.yaml` 的 `toward_command` 新增 `yaw_trim_rate: 2.0`
+
 ## v0.6.9 2026-09-15
 1. `TowardCommand` 手柄映射由基座系方向改为世界系朝向：左摇杆上=world +X、左=world +Y（`lx` 右正取负），输出基座系朝向误差 `[cos(psi_w - yaw), sin(psi_w - yaw)]`，摇杆回中保持上次朝向，`max_speed` 默认 `2.0`
 2. `manager_based_rl_env.h` 新增 `root_heading_w`，将 IMU yaw 传入 `TowardCommand::update`
