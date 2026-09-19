@@ -72,11 +72,7 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
             if (cache_path.is_relative()) {
                 cache_path = policy_dir / cache_path;
             }
-            std::filesystem::create_directories(cache_path);
             ort_options.tensorrt_engine_cache_path = cache_path.string();
-            spdlog::info(
-                "TensorRT engine cache enabled: {}",
-                ort_options.tensorrt_engine_cache_path);
         }
     }
     env->alg = std::make_unique<isaaclab::OrtRunner>(

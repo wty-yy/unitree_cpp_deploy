@@ -82,6 +82,13 @@ OnnxExecProvider append_best_provider(
         status = api.SessionOptionsAppendExecutionProvider_TensorRT(options, &trt_options);
         if (status == nullptr)
         {
+            if (!trt_cache_path.empty())
+            {
+                std::filesystem::create_directories(trt_cache_path);
+                spdlog::info(
+                    "State_OmniXtreme: TensorRT engine cache enabled: {}",
+                    trt_cache_path);
+            }
             return OnnxExecProvider::TensorRT;
         }
         spdlog::warn("State_OmniXtreme: append TensorRT provider failed: {}", api.GetErrorMessage(status));
@@ -237,10 +244,6 @@ void State_OmniXtreme::load_policy_and_env(const YAML::Node& cfg)
         cfg["onnx_trt_cache_dir"] ? cfg["onnx_trt_cache_dir"].as<std::string>() : "trt_cache";
     const std::filesystem::path trt_cache_path =
         trt_cache_dir.empty() ? std::filesystem::path() : (policy_dir_ / trt_cache_dir);
-    if (!trt_cache_path.empty())
-    {
-        std::filesystem::create_directories(trt_cache_path);
-    }
 
     base_session_options_.SetGraphOptimizationLevel(ORT_ENABLE_EXTENDED);
     residual_session_options_.SetGraphOptimizationLevel(ORT_ENABLE_EXTENDED);

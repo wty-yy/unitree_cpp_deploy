@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v0.6.10 2026-09-19
+1. 修复产生空的 `trt_cache` 目录问题
+2. 重新整理 `logs/go2/go2_rl_lab` 下权重
+
 ## v0.6.9.post1 2026-09-15
 1. `TowardCommand` 手柄映射改为左摇杆前后=期望线速度（`max_speed` 上限，回拉为零）、右摇杆左右=期望世界 yaw 微调（`yaw_trim_rate` rad/s 与摇杆偏移成比例，松手后保持），`update` 新增 `dt` 参数
 2. 期望 yaw 在 FSM 切入状态时初始化为当前 IMU yaw：`TowardCommand::reset(root_heading_w)` 取 `manager_based_rl_env.h` 的 `root_heading_w`，避免切入瞬间转向 world +X

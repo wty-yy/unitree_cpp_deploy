@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <filesystem>
 #include <limits>
 #include <map>
 #include <mutex>
@@ -336,6 +337,14 @@ private:
                             ? nullptr
                             : options.tensorrt_engine_cache_path.c_str();
                     candidate_options.AppendExecutionProvider_TensorRT(tensorrt_options);
+                    if (!options.tensorrt_engine_cache_path.empty())
+                    {
+                        std::filesystem::create_directories(
+                            options.tensorrt_engine_cache_path);
+                        spdlog::info(
+                            "TensorRT engine cache enabled: {}",
+                            options.tensorrt_engine_cache_path);
+                    }
                 } catch (const Ort::Exception& error) {
                     last_error = error.what();
                     tensorrt_registration_failed = true;

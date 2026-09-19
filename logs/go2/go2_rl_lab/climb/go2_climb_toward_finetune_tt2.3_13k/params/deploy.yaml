@@ -12,7 +12,7 @@ commands:
       enabled: true
       max_speed: 1.0
       deadzone: 0.1
-      direction_angle_range: [-0.785398, 0.785398]  # +/-pi/4 rad: clamp left-stick direction to a forward cone
+      yaw_trim_rate: 2.0  # rad/s at full right-stick deflection
 actions:
   JointPositionAction:
     clip:
