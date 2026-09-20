@@ -18,6 +18,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <string>
 #include <termios.h>
 #include <unistd.h>
 #include <vector>
@@ -34,6 +35,17 @@ namespace
 
 constexpr char kWindowName[] = "DDS depth viewer (R: record, Q/Esc: quit)";
 std::atomic<bool> running{true};
+
+void PrintUsage(const char* program)
+{
+    std::cout << "Usage: " << program << " [OPTIONS]\n"
+              << "\n"
+              << "  --viz, --preview        Force the OpenCV preview window on\n"
+              << "  --no-viz, --no-preview  Force the OpenCV preview window off\n"
+              << "  -h, --help              Show this help\n"
+              << "\n"
+              << "Without an explicit option, preview.enabled from config.yaml is used.\n";
+}
 
 class TerminalInput
 {
@@ -115,16 +127,39 @@ void ConvertToGrayscale(
 
 }  // namespace
 
-int main()
+int main(int argc, char** argv)
 {
+    bool preview_override_set = false;
+    bool preview_override = false;
+    for (int index = 1; index < argc; ++index) {
+        const std::string argument = argv[index];
+        if (argument == "--viz" || argument == "--preview") {
+            preview_override_set = true;
+            preview_override = true;
+        } else if (argument == "--no-viz" || argument == "--no-preview") {
+            preview_override_set = true;
+            preview_override = false;
+        } else if (argument == "-h" || argument == "--help") {
+            PrintUsage(argv[0]);
+            return 0;
+        } else {
+            std::cerr << "Unknown argument: " << argument << std::endl;
+            PrintUsage(argv[0]);
+            return 2;
+        }
+    }
+
     std::signal(SIGINT, HandleSignal);
     std::signal(SIGTERM, HandleSignal);
     std::signal(SIGPIPE, SIG_IGN);
 
     try {
         const std::filesystem::path config_path = VIEWER_CONFIG_PATH;
-        const camera_viewer::ViewerConfig config =
+        camera_viewer::ViewerConfig config =
             camera_viewer::LoadViewerConfig(config_path);
+        if (preview_override_set) {
+            config.preview.enabled = preview_override;
+        }
         std::cout << "Configuration: " << config_path << std::endl;
 
         unitree::robot::ChannelFactory::Instance()->Init(
@@ -141,6 +176,8 @@ int main()
                   << "Record control topic: " << config.dds.control_topic << "\n"
                   << "Wireless controller topic: "
                   << config.dds.wireless_controller_topic << "\n"
+                  << "Preview: " << (config.preview.enabled ? "enabled" : "disabled")
+                  << "\n"
                   << "Controls: terminal R=record, Q=quit; window R=record, Esc=quit"
                   << std::endl;
 

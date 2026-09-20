@@ -11,9 +11,10 @@ viewer_pid=""
 
 usage() {
   cat <<'EOF'
-Usage: ./deploy/camera/run.sh [--build]
+Usage: ./deploy/camera/run.sh [--build] [--viz]
 
   -b, --build  Configure and build before starting
+      --viz    Enable the OpenCV preview window (overrides config.yaml)
   -h, --help   Show this help
 EOF
 }
@@ -54,14 +55,14 @@ cleanup() {
 }
 
 build=false
-if [[ $# -gt 1 ]]; then
-  usage >&2
-  exit 2
-fi
-if [[ $# -eq 1 ]]; then
+viz=false
+while [[ $# -gt 0 ]]; do
   case "$1" in
     -b|--build)
       build=true
+      ;;
+    --viz)
+      viz=true
       ;;
     -h|--help)
       usage
@@ -72,7 +73,8 @@ if [[ $# -eq 1 ]]; then
       exit 2
       ;;
   esac
-fi
+  shift
+done
 
 if [[ "${build}" == true ]]; then
   check_ffmpeg
@@ -108,7 +110,11 @@ viewer_stdin="/dev/null"
 if [[ -t 0 ]]; then
   viewer_stdin="/dev/tty"
 fi
-stdbuf -oL -eL "${viewer_bin}" < "${viewer_stdin}" \
+viewer_args=()
+if [[ "${viz}" == true ]]; then
+  viewer_args+=(--viz)
+fi
+stdbuf -oL -eL "${viewer_bin}" "${viewer_args[@]}" < "${viewer_stdin}" \
   > >(sed -u 's/^/[viewer] /') \
   2> >(sed -u 's/^/[viewer] /' >&2) &
 viewer_pid=$!
