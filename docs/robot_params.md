@@ -206,6 +206,36 @@ Velocity:
     duration: 3.0        # 持续时间（秒），null 为无限
 ```
 
+#### 加速模式（可选）
+
+在模型的 `params/deploy.yaml` 中为 `commands.base_velocity` 添加 `boost` 节点后，按住加速按键即可把摇杆指令上限切换为加速档。加速按键在 `config.yaml` 的状态配置中用 `boost_button` 指定，不配置时默认为 `RT`：
+
+```yaml
+# config.yaml
+Velocity:
+  transitions:
+    Passive: LT + B.on_pressed
+  policy_dir: ../../../logs/go2/go2_rl_lab/mixed/contest_v1_101k
+  boost_button: RT       # 加速按键（可选，默认 RT）
+```
+
+```yaml
+# 模型 params/deploy.yaml
+commands:
+  base_velocity:
+    ranges:
+      lin_vel_x: [-2.0, 2.0]
+      lin_vel_y: [-1.0, 1.0]
+      ang_vel_z: [-3.0, 3.0]
+    boost:
+      # enabled: true    # 默认 true，设为 false 可关闭
+      lin_vel_x: [-3.0, 3.0]
+      lin_vel_y: [-1.0, 1.0]
+      ang_vel_z: [-2.0, 2.0]
+```
+
+范围也可以写成 `boost.ranges`；未配置 `boost` 时不启用。加速只作用于摇杆指令，固定指令（`fixed_command`）与 toward 指令不受影响。
+
 `policy_dir` 目录结构要求：
 ```
 policy_dir/

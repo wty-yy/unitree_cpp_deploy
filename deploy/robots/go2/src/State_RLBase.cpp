@@ -280,6 +280,7 @@ void State_RLBase::run()
 
             // Command vector fed to the policy (toward: direction + speed)
             logger->add("cmd_obs", env->velocity_command());
+            logger->add("cmd_boost", env->boost_active() ? 1.0f : 0.0f);
 
             // Fixed command (log zeros when inactive)
             float fixed_0 = 0.0f;

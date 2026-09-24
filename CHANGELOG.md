@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## v0.6.11 2026-09-24
+1. 新增`boost_button`功能
+
 ## v0.6.10 2026-09-19
 1. 修复产生空的 `trt_cache` 目录问题
 2. 重新整理 `logs/go2/go2_rl_lab` 下权重

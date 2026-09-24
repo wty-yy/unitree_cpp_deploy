@@ -42,8 +42,8 @@ int main(int argc, char** argv)
     fsm->start();
 
     std::cout << "State transitions:\n";
-    std::cout << "  [L2 + A]: Passive -> FixStand, Velocity_* -> FixSquat, FixSquat -> FixStand\n";
-    std::cout << "  [Start + Up/Down/Left/Right]: FixStand -> Velocity_*\n";
+    std::cout << "  [L2 + Start]: Passive -> FixStand, Velocity_* -> FixSquat, FixSquat -> FixStand\n";
+    std::cout << "  [Y/A/X/B]: FixStand / Velocity_* -> Velocity_Up/Down/Left/Right\n";
     std::cout << "  [L2 + B]: FixStand / FixSquat / Velocity_* -> Passive\n";
     std::cout << "  [Auto]: FixSquat -> Passive after the squat trajectory finishes\n";
 

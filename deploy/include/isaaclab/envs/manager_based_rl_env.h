@@ -135,6 +135,11 @@ public:
             : velocity_command_damper_.command();
     }
 
+    bool boost_active() const
+    {
+        return velocity_command_damper_.boost_active();
+    }
+
     void invalidate_observations()
     {
         observations_valid_ = false;

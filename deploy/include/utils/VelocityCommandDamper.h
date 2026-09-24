@@ -4,11 +4,19 @@
 // Builds velocity commands from joystick or fixed-command inputs and applies
 // configurable speed-dependent first-order damping and acceleration limits to
 // vx. Lateral and yaw commands remain unfiltered.
+//
+// When commands.base_velocity.boost is present in the model deploy.yaml,
+// holding the boost button configured per FSM state (fsm_cfg boost_button,
+// default RT) scales the joystick commands with the boosted ranges instead of
+// the regular ones.
 
 #pragma once
 
 #include <unitree/dds_wrapper/common/unitree_joystick.hpp>
+#include <spdlog/spdlog.h>
 #include <yaml-cpp/yaml.h>
+
+#include "unitree_joystick_dsl.hpp"
 
 #include <algorithm>
 #include <array>
@@ -32,6 +40,7 @@ public:
     {
         joystick_ = joystick;
         configure_command_ranges(policy_cfg);
+        configure_boost(policy_cfg, fsm_cfg);
         configure_damping(fsm_cfg);
     }
 
@@ -46,15 +55,18 @@ public:
         }
 
         if (use_fixed_command) {
+            boost_active_ = false;
             std::copy(fixed_command.begin(), fixed_command.end(), command_.begin());
         } else {
             if (joystick_ == nullptr) {
                 throw std::runtime_error("VelocityCommandDamper joystick is not configured");
             }
 
-            command_[0] = scale_command(joystick_->ly(), command_ranges_[0]);
-            command_[1] = scale_command(-joystick_->lx(), command_ranges_[1]);
-            command_[2] = scale_command(-joystick_->rx(), command_ranges_[2]);
+            boost_active_ = boost_enabled_ && boost_button_ != nullptr && boost_button_->pressed;
+            const auto& ranges = boost_active_ ? boost_command_ranges_ : command_ranges_;
+            command_[0] = scale_command(joystick_->ly(), ranges[0]);
+            command_[1] = scale_command(-joystick_->lx(), ranges[1]);
+            command_[2] = scale_command(-joystick_->rx(), ranges[2]);
         }
 
         command_[0] = update_vx(command_[0], dt);
@@ -69,6 +81,11 @@ public:
     const std::vector<float>& command() const
     {
         return command_;
+    }
+
+    bool boost_active() const
+    {
+        return boost_active_;
     }
 
 private:
@@ -93,6 +110,55 @@ private:
         command_ranges_[1] = parse_range(ranges_cfg, "lin_vel_y");
         command_ranges_[2] = parse_range(ranges_cfg, "ang_vel_z");
         has_command_ranges_ = true;
+    }
+
+    void configure_boost(const YAML::Node& policy_cfg, const YAML::Node& fsm_cfg)
+    {
+        boost_enabled_ = false;
+        boost_active_ = false;
+        boost_button_ = nullptr;
+        boost_command_ranges_ = {};
+
+        const auto commands_cfg = policy_cfg["commands"];
+        const auto base_velocity_cfg = commands_cfg
+            ? commands_cfg["base_velocity"]
+            : YAML::Node();
+        const auto boost_cfg = base_velocity_cfg
+            ? base_velocity_cfg["boost"]
+            : YAML::Node();
+        if (!boost_cfg) {
+            return;
+        }
+
+        const bool enabled = boost_cfg["enabled"]
+            ? boost_cfg["enabled"].as<bool>()
+            : true;
+        if (!enabled) {
+            return;
+        }
+        if (joystick_ == nullptr) {
+            throw std::invalid_argument("VelocityCommandDamper boost requires a joystick");
+        }
+
+        const auto button_cfg = fsm_cfg ? fsm_cfg["boost_button"] : YAML::Node();
+        const std::string button_name = button_cfg
+            ? button_cfg.as<std::string>()
+            : "RT";
+        boost_button_ = &unitree::common::dsl::GetKey(*joystick_, button_name);
+
+        const auto ranges_cfg = boost_cfg["ranges"] ? boost_cfg["ranges"] : boost_cfg;
+        boost_command_ranges_[0] = parse_range(ranges_cfg, "lin_vel_x");
+        boost_command_ranges_[1] = parse_range(ranges_cfg, "lin_vel_y");
+        boost_command_ranges_[2] = parse_range(ranges_cfg, "ang_vel_z");
+        boost_enabled_ = true;
+
+        spdlog::info(
+            "Velocity command boost enabled: hold [{}] for "
+            "lin_vel_x=[{:.2f}, {:.2f}], lin_vel_y=[{:.2f}, {:.2f}], ang_vel_z=[{:.2f}, {:.2f}]",
+            button_name,
+            boost_command_ranges_[0][0], boost_command_ranges_[0][1],
+            boost_command_ranges_[1][0], boost_command_ranges_[1][1],
+            boost_command_ranges_[2][0], boost_command_ranges_[2][1]);
     }
 
     void configure_damping(const YAML::Node& fsm_cfg)
@@ -239,11 +305,15 @@ private:
 
     bool enabled_ = false;
     bool has_command_ranges_ = false;
+    bool boost_enabled_ = false;
+    bool boost_active_ = false;
     float vx_ = 0.0f;
     float max_acceleration_ = std::numeric_limits<float>::infinity();
     float max_deceleration_ = std::numeric_limits<float>::infinity();
     unitree::common::UnitreeJoystick* joystick_ = nullptr;
+    const unitree::common::KeyBase* boost_button_ = nullptr;
     std::array<Range, 3> command_ranges_{};
+    std::array<Range, 3> boost_command_ranges_{};
     std::vector<float> command_{0.0f, 0.0f, 0.0f};
     std::vector<float> speed_points_;
     std::vector<float> time_constants_;
