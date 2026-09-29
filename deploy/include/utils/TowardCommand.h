@@ -1,7 +1,8 @@
 // Builds toward commands from the joystick for the flat-toward policy, which
 // consumes [direction_x, direction_y, desired_speed]. The left stick forward
-// deflection directly gives the desired linear speed (0..max_speed); pulling it
-// back is ignored because negative speed is not supported. The desired world yaw
+// deflection gives the desired linear speed (0..max_speed); pulling it back
+// gives a backward speed down to min_speed (non-positive, 0 disables reverse).
+// The desired world yaw
 // starts at the robot's current heading whenever the FSM enters the state and is
 // finely trimmed by the right stick left/right at yaw_trim_rate rad/s,
 // proportional to the stick deflection, so steering changes gradually instead of
@@ -16,6 +17,7 @@
 //       toward_command:
 //         enabled: true
 //         max_speed: 2.0
+//         min_speed: -1.0  # non-positive, 0 disables reverse
 //         deadzone: 0.1
 //         yaw_trim_rate: 0.5  # rad/s at full right-stick deflection
 //         direction_angle_range: [-0.785398, 0.785398]  # rad, defaults to [-pi, pi]
@@ -45,6 +47,7 @@ public:
         joystick_ = joystick;
         enabled_ = false;
         max_speed_ = 2.0f;
+        min_speed_ = 0.0f;
         deadzone_ = 0.1f;
         yaw_trim_rate_ = 0.5f;
         direction_angle_range_ = {-static_cast<float>(M_PI), static_cast<float>(M_PI)};
@@ -66,6 +69,14 @@ public:
                 throw std::invalid_argument(
                     "commands.base_velocity.toward_command.max_speed "
                     "must be finite and non-negative");
+            }
+        }
+        if (toward_cfg["min_speed"]) {
+            min_speed_ = toward_cfg["min_speed"].as<float>();
+            if (!std::isfinite(min_speed_) || min_speed_ > 0.0f) {
+                throw std::invalid_argument(
+                    "commands.base_velocity.toward_command.min_speed "
+                    "must be finite and non-positive");
             }
         }
         if (toward_cfg["deadzone"]) {
@@ -106,10 +117,10 @@ public:
         }
         enabled_ = true;
         spdlog::info(
-            "Toward command enabled: left stick forward speed up to {:.2f} m/s "
+            "Toward command enabled: left stick speed in [{:.2f}, {:.2f}] m/s "
             "(deadzone {:.2f}), desired yaw starts at the entry heading, heading "
             "error clamped to [{:.3f}, {:.3f}] rad, yaw trim up to {:.2f} rad/s",
-            max_speed_, deadzone_,
+            min_speed_, max_speed_, deadzone_,
             direction_angle_range_[0], direction_angle_range_[1],
             yaw_trim_rate_);
     }
@@ -135,12 +146,12 @@ public:
         }
 
         // Unitree remote: ly is forward-positive, rx is right-positive.
-        // Left stick forward deflection is the desired linear speed directly;
-        // pulling it back gives zero since negative speed is not supported.
+        // Left stick deflection maps linearly to [min_speed, max_speed].
         float speed = joystick_->ly();
-        if (speed < deadzone_) {
+        if (std::fabs(speed) < deadzone_) {
             speed = 0.0f;
         }
+        speed = std::clamp(speed, -1.0f, 1.0f);
 
         // Right stick left/right trims the desired world yaw (left is positive),
         // which is kept on top of the heading captured when the state was entered.
@@ -156,7 +167,7 @@ public:
             direction_angle_range_[0], direction_angle_range_[1]);
         command_[0] = std::cos(heading_error);
         command_[1] = std::sin(heading_error);
-        command_[2] = std::clamp(speed, 0.0f, 1.0f) * max_speed_;
+        command_[2] = speed >= 0.0f ? speed * max_speed_ : -speed * min_speed_;
     }
 
     void reset(float root_heading_w)
@@ -178,6 +189,7 @@ private:
 
     bool enabled_ = false;
     float max_speed_ = 2.0f;
+    float min_speed_ = 0.0f;
     float deadzone_ = 0.1f;
     float yaw_trim_rate_ = 0.5f;
     std::array<float, 2> direction_angle_range_{
