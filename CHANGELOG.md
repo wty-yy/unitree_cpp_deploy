@@ -1,4 +1,8 @@
-# UPDATE
+# CHANGELOG
+## 20261007 v0.6.6
+1. 新增Boost支持`boost_button: RT`，`commands.base_velocity.boost.ranges`下做boost模型下的最大速度配置
+2. 新增`enable_bad_orientation_check: false`开关，默认为true
+
 ## 20260609 v0.6.5
 1. 新增state preflight机制，在创建状态前检查`policy_dir`、`deploy_yaml`、onnx模型、latent文件和motion文件是否存在，当Velocity/BFM/OmniXtreme/BeyondMimic等模型依赖缺失时，自动禁用对应state，不再导致程序启动失败，触发已禁用state时保持当前状态，并持续输出warning说明禁用原因
 2. 重构overlay注册

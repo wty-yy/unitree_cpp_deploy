@@ -109,7 +109,8 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
 
     env = std::make_unique<isaaclab::ManagerBasedRLEnv>(
         YAML::LoadFile(policy_dir / "params" / "deploy.yaml"),
-        std::make_shared<unitree::BaseArticulation<LowState_t::SharedPtr>>(FSMState::lowstate)
+        std::make_shared<unitree::BaseArticulation<LowState_t::SharedPtr>>(FSMState::lowstate),
+        cfg
     );
     env->alg = std::make_unique<isaaclab::OrtRunner>(policy_dir / "exported" / "policy.onnx");
 
@@ -140,14 +141,24 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
             joint_filter::default_waist_joint_indices(dof));
     }
 
-    this->registered_checks.emplace_back(
-        std::make_pair(
-            [&]()->bool{ return isaaclab::mdp::bad_orientation(env.get(), 1.0); },
-            FSMStringMap.right.at("Passive")
-        )
-    );
+    const bool enable_bad_orientation_check = cfg["enable_bad_orientation_check"]
+        ? cfg["enable_bad_orientation_check"].as<bool>()
+        : true;
+    if (enable_bad_orientation_check)
+    {
+        this->registered_checks.emplace_back(
+            std::make_pair(
+                [this]()->bool{ return isaaclab::mdp::bad_orientation(env.get(), 1.0); },
+                FSMStringMap.right.at("Passive")
+            )
+        );
+    }
+    else
+    {
+        spdlog::info("State_{}: bad orientation check disabled", state_string);
+    }
 
-    enable_logging = cfg["logging"] ? cfg["logging"].as<bool>() : true;
+    enable_logging = cfg["logging"] ? cfg["logging"].as<bool>() : false;
     log_obs_terms_ = logging_option_enabled(cfg, "obs_terms");
     log_obs_ = logging_option_enabled(cfg, "obs");
     log_action_raw_ = logging_option_enabled(cfg, "action_raw");
@@ -410,6 +421,7 @@ void State_RLBase::run()
 
     if (log_commands_)
     {
+        logger->add("cmd_boost", env->boost_active() ? 1.0f : 0.0f);
         logger->add("cmd_ns_0", lowstate->joystick.ly());
         logger->add("cmd_ns_1", -lowstate->joystick.lx());
         logger->add("cmd_ns_2", -lowstate->joystick.rx());

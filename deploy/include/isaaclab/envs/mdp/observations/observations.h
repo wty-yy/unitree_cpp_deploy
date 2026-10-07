@@ -111,7 +111,7 @@ REGISTER_OBSERVATION(velocity_commands)
     }
 
     auto & joystick = env->robot->data.joystick;
-    auto cfg = env->cfg["commands"]["base_velocity"]["ranges"];
+    auto cfg = env->velocity_command_ranges();
 
     obs[0] = joystick->ly();
     obs[1] = -joystick->lx();

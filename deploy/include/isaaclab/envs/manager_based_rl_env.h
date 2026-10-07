@@ -10,6 +10,7 @@
 #include "isaaclab/envs/mdp/commands/motion_command.h"
 #include "isaaclab/assets/articulation/articulation.h"
 #include "isaaclab/algorithms/algorithms.h"
+#include "utils/VelocityCommandBoost.h"
 #include <iostream>
 #include <map>
 #include <mutex>
@@ -34,7 +35,10 @@ class ManagerBasedRLEnv
 {
 public:
     // Constructor
-    ManagerBasedRLEnv(YAML::Node cfg, std::shared_ptr<Articulation> robot_)
+    ManagerBasedRLEnv(
+        YAML::Node cfg,
+        std::shared_ptr<Articulation> robot_,
+        const YAML::Node& fsm_cfg = YAML::Node())
     :cfg(cfg), robot(std::move(robot_))
     {
         // Parse configuration
@@ -65,6 +69,8 @@ public:
         }
 
         robot->update();
+
+        velocity_command_boost_.configure(this->cfg, fsm_cfg, robot->data.joystick);
 
         // load managers
         if (cfg["actions"])
@@ -130,6 +136,18 @@ public:
         return last_policy_snapshot_;
     }
 
+    bool boost_active() const
+    {
+        return !(fixed_command_enabled && fixed_command_active) && velocity_command_boost_.active();
+    }
+
+    YAML::Node velocity_command_ranges() const
+    {
+        return boost_active()
+            ? velocity_command_boost_.ranges()
+            : cfg["commands"]["base_velocity"]["ranges"];
+    }
+
     float step_dt;
     
     YAML::Node cfg;
@@ -153,6 +171,7 @@ public:
     std::chrono::steady_clock::time_point fixed_command_start_time;
 
 private:
+    utils::VelocityCommandBoost velocity_command_boost_;
     mutable std::mutex policy_snapshot_mutex_;
     PolicyLoggingSnapshot last_policy_snapshot_;
 };
