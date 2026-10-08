@@ -98,7 +98,8 @@ FSM:
       Velocity_A: RB + A.on_pressed
       BFM_goal: RT + Y.on_pressed
       OmniXtreme: RT + X.on_pressed
-    policy_dir: ../../../logs/g1/velocity/unitree_rl_mjlab_ppo
+    policy_dir: ../../../logs/g1/g1_rl_lab/mixed/g1_mixed_moe_cts_amp3.4_6.5k
+    boost_button: RT  # Hold to use commands.base_velocity.boost.ranges.
     logging: false
     logging_dt: 0.02
     logging_options:
@@ -117,13 +118,15 @@ FSM:
       Velocity_X: RB + X.on_pressed
       BFM_goal: RT + Y.on_pressed
       OmniXtreme: RT + X.on_pressed
-    policy_dir: ../../../logs/g1/velocity/unitree_rl_mjlab_fastsac
+    policy_dir: ../../../logs/g1/g1_rl_lab/crawl/g1_crawl_v3.4_8k
+    enable_bad_orientation_check: false
 
   BFM_goal:
     transitions: 
       Passive: LT + B.on_pressed
       Velocity_Y: RB + Y.on_pressed
       Velocity_X: RB + X.on_pressed
+      Velocity_A: RB + A.on_pressed
       OmniXtreme: RT + X.on_pressed
     policy_dir: ../../../logs/g1/bfm/official
     verbose_runtime_log: false
@@ -148,9 +151,12 @@ FSM:
       reset_state: X.on_pressed
     goal:
       selected_goals: [
-        # fallAndGetUp1_subject4_2193,
+        fight1_subject3_5559,
+        fallAndGetUp1_subject4_2193,
+        fallAndGetUp1_subject4_2230,
         # dance1_subject3_505,
-        fight1_subject3_5559, 
+        # dance1_subject3_505,
+        fight1_subject3_5559,
         # fallAndGetUp1_subject4_2193,
       ]
 
@@ -159,6 +165,7 @@ FSM:
       Passive: LT + B.on_pressed
       Velocity_Y: RB + Y.on_pressed
       Velocity_X: RB + X.on_pressed
+      Velocity_A: RB + A.on_pressed
       BFM_goal: RT + Y.on_pressed
     policy_dir: ../../../logs/g1/omnixtreme/official
     deploy_yaml: params/deploy.yaml
@@ -228,14 +235,19 @@ FSM:
       Passive: LT + B.on_pressed
       Velocity_Y: RB + Y.on_pressed
       Velocity_X: RB + X.on_pressed
+      Velocity_A: RB + A.on_pressed
       BFM_goal: RT + Y.on_pressed
       OmniXtreme: RT + X.on_pressed
-    fps: 30  # Motion file fps
+    fps: 50  # Motion file fps
+    joint_vel_reference: true  # CSV includes exact reference joint velocities
+    z_axis_yaw_projection: true
     motion_files:
       # - ../../../logs/g1/beyondmimic/dailylife_7.3w_20260504/motions
-      - ../../../logs/g1/beyondmimic/dailylife_walk_v2/motions
+      # - ../../../logs/g1/beyondmimic/dailylife_walk_v2/motions
+      - ../../../logs/g1/beyondmimic/crawl_v1/motions/crawl_forward_fast_reconstructed.csv
     # policy_dir: ../../../logs/g1/beyondmimic/dailylife_7.3w_20260504
-    policy_dir: ../../../logs/g1/beyondmimic/dailylife_walk_v2
+    # policy_dir: ../../../logs/g1/beyondmimic/dailylife_walk_v2
+    policy_dir: ../../../logs/g1/beyondmimic/crawl_v1
     deploy_yaml: param/deploy.yaml
     onnx_model: exported/policy.onnx
     time_start: null   # Start time [sec], null from the beginning

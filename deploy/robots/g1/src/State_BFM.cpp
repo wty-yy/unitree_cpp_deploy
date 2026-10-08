@@ -691,7 +691,7 @@ void State_BFM::handle_gamepad_events()
         return;
     }
 
-    const auto& joy = lowstate->joystick;
+    const auto& joy = FSMState::effective_joystick();
 
     if (start_motion_trigger_ && start_motion_trigger_(joy))
     {

@@ -63,7 +63,7 @@ public:
         {
             return false;
         }
-        return open_trigger_(FSMState::lowstate->joystick);
+        return open_trigger_(FSMState::effective_joystick());
     }
 
     void on_activate(const std::string& host_state_name) override
@@ -90,7 +90,7 @@ public:
             return;
         }
 
-        const auto& joy = FSMState::lowstate->joystick;
+        const auto& joy = FSMState::effective_joystick();
         if (cancel_trigger_ && cancel_trigger_(joy))
         {
             std::cout << std::endl;

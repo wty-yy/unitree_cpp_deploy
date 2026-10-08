@@ -161,6 +161,9 @@ public:
     
     std::map<std::string, std::vector<float>> last_inference_results;
 
+    // Set only by the G1 Velocity_X state.
+    bool external_velocity_enabled = false;
+
     // Fixed command control
     bool fixed_command_enabled = false;
     bool fixed_command_active = false;

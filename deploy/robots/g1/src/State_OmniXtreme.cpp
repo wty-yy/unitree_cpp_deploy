@@ -1263,7 +1263,7 @@ void State_OmniXtreme::reset_tracking_state(bool keep_current_traj)
 
 void State_OmniXtreme::handle_gamepad_events()
 {
-    const auto& joy = FSMState::lowstate->joystick;
+    const auto& joy = FSMState::effective_joystick();
 
     if (toggle_execute_trigger_ && toggle_execute_trigger_(joy))
     {

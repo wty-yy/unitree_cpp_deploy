@@ -2,6 +2,7 @@
 // All rights reserved.
 
 #pragma once
+#include "utils/ExternalVelocity.h"
 
 #include "isaaclab/envs/manager_based_rl_env.h"
 
@@ -100,6 +101,37 @@ REGISTER_OBSERVATION(last_action)
 
 REGISTER_OBSERVATION(velocity_commands)
 {
+    YAML::Node cfg;
+    if (env->external_velocity_enabled)
+    {
+        auto& bridge = robot_automation::ExternalVelocity::instance();
+        robot_automation::ExternalVelocity::Ranges ranges;
+        try {
+            cfg = env->velocity_command_ranges();
+            const std::array<const char*, 3> keys{"lin_vel_x", "lin_vel_y", "ang_vel_z"};
+            for (std::size_t i = 0; i < keys.size(); ++i) {
+                const auto axis = cfg[keys[i]];
+                if (!axis.IsSequence() || axis.size() != 2) {
+                    bridge.invalidate_ranges();
+                    return std::vector<float>(3, 0.0f);
+                }
+                ranges[i] = {axis[0].as<double>(), axis[1].as<double>()};
+            }
+        } catch (const YAML::Exception&) {
+            bridge.invalidate_ranges();
+            return std::vector<float>(3, 0.0f);
+        }
+        if (!bridge.set_ranges(ranges, env->boost_active()))
+            return std::vector<float>(3, 0.0f);
+        std::array<float, 3> external;
+        if (bridge.sample(external))
+            return std::vector<float>(external.begin(), external.end());
+    }
+    else
+    {
+        cfg = env->velocity_command_ranges();
+    }
+
     std::vector<float> obs(3);
 
     // Check if fixed command mode is active
@@ -111,7 +143,6 @@ REGISTER_OBSERVATION(velocity_commands)
     }
 
     auto & joystick = env->robot->data.joystick;
-    auto cfg = env->velocity_command_ranges();
 
     obs[0] = joystick->ly();
     obs[1] = -joystick->lx();

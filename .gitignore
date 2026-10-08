@@ -5,3 +5,11 @@ images
 __pycache__/
 .vscode/
 mytest*
+
+# Local builds, test executables, and deployment backups
+/deploy-backup/
+/deploy/tests/external_velocity_test
+.cache/
+.pytest_cache/
+*.py[cod]
+*.log

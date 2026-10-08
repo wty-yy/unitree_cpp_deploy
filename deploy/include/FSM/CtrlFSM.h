@@ -7,8 +7,11 @@
 #include "BaseState.h"
 #include "FSM/FSMOverlayState.h"
 #include "FSM/FSMState.h"
+#include "utils/ExternalVelocity.h"
 #include "unitree_joystick_dsl.hpp"
+#include <array>
 #include <functional>
+#include <set>
 #include <spdlog/spdlog.h>
 #include <string>
 #include <unordered_map>
@@ -116,13 +119,32 @@ private:
     void run_()
     {
         currentState->pre_run();
+        apply_external_joystick_();
+        FSMState::update_effective_joystick();
+        update_external_velocity_();
         currentState->run();
         update_overlay_();
         currentState->post_run();
         
         // Check if need to change state
         int nextStateMode = 0;
-        if (active_overlay_ && active_overlay_->finished() && active_overlay_->requested_state_id() != 0)
+        std::string requested_state;
+        const bool external_request =
+            robot_automation::ExternalVelocity::instance().take_requested_state(requested_state);
+        if (external_request)
+        {
+            const auto requested_id = FSMStringMap.right.find(requested_state);
+            if (requested_id == FSMStringMap.right.end())
+            {
+                robot_automation::ExternalVelocity::instance().report_state_result(
+                    false, "Unknown FSM state: " + requested_state);
+            }
+            else
+            {
+                nextStateMode = requested_id->second;
+            }
+        }
+        else if (active_overlay_ && active_overlay_->finished() && active_overlay_->requested_state_id() != 0)
         {
             nextStateMode = active_overlay_->requested_state_id();
         }
@@ -143,6 +165,8 @@ private:
             if (is_disabled_state_(nextStateMode))
             {
                 warn_disabled_state_(nextStateMode);
+                robot_automation::ExternalVelocity::instance().report_state_result(
+                    false, "FSM state is disabled: " + std::to_string(nextStateMode));
                 return;
             }
 
@@ -156,13 +180,61 @@ private:
                         active_overlay_->deactivate();
                         active_overlay_.reset();
                     }
+                    robot_automation::ExternalVelocity::instance().update("Transition", false, false);
                     currentState->exit();
                     currentState = state;
                     currentState->enter();
+                    update_external_velocity_();
+                    robot_automation::ExternalVelocity::instance().report_state_result(
+                        true, "Transitioned to " + state->getStateString());
                     break;
                 }
             }
         }
+        else if (external_request && nextStateMode != 0)
+        {
+            robot_automation::ExternalVelocity::instance().report_state_result(
+                true, "Already in " + requested_state);
+        }
+    }
+
+    void apply_external_joystick_()
+    {
+        std::vector<std::string> buttons;
+        bool has_axes = false;
+        std::array<float, 4> axes{0.0f, 0.0f, 0.0f, 0.0f};
+        if (robot_automation::ExternalVelocity::instance().virtual_joystick(buttons, has_axes, axes))
+        {
+            FSMState::set_virtual_input(std::set<std::string>(buttons.begin(), buttons.end()),
+                                        has_axes, axes[0], axes[1], axes[2], axes[3]);
+        }
+        else
+        {
+            FSMState::clear_virtual_input();
+        }
+    }
+
+    void update_external_velocity_()
+    {
+        auto& joy = FSMState::lowstate->joystick;
+        const bool manual = joy.LT.pressed || std::abs(joy.lx()) > 0.12f ||
+            std::abs(joy.ly()) > 0.12f || std::abs(joy.rx()) > 0.12f;
+        robot_automation::ExternalVelocity::instance().update(
+            currentState->getStateString(), manual, !FSMState::lowstate->isTimeout());
+
+        robot_automation::ExternalVelocity::MotorHealthSample motors;
+        uint32_t tick;
+        {
+            std::lock_guard<std::mutex> guard(FSMState::lowstate->mutex_);
+            const auto& sample = FSMState::lowstate->msg_;
+            tick = sample.tick();
+            for (std::size_t i = 0; i < motors.size(); ++i) {
+                motors[i].motorstate = sample.motor_state()[i].motorstate();
+                motors[i].temperature_c = sample.motor_state()[i].temperature();
+            }
+        }
+        // Never nest the DDS sample mutex with the bridge mutex.
+        robot_automation::ExternalVelocity::instance().update_motor_health(tick, motors);
     }
 
     bool is_disabled_state_(int state_id) const
@@ -208,7 +280,7 @@ private:
 
         for (const auto& disabled_overlay : disabled_overlay_triggers_)
         {
-            if (disabled_overlay.trigger && disabled_overlay.trigger(FSMState::lowstate->joystick))
+            if (disabled_overlay.trigger && disabled_overlay.trigger(FSMState::effective_joystick()))
             {
                 warn_disabled_state_(disabled_overlay.target_state_id);
             }

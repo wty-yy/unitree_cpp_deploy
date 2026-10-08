@@ -95,6 +95,7 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
         std::make_shared<unitree::BaseArticulation<LowState_t::SharedPtr>>(FSMState::lowstate),
         cfg
     );
+    env->external_velocity_enabled = state_string == "Velocity_X" || state_string == "Velocity_A";
     env->alg = std::make_unique<isaaclab::OrtRunner>(policy_dir / "exported" / "policy.onnx");
 
     const std::size_t dof = env->robot->data.joint_ids_map.size();
@@ -209,7 +210,7 @@ void State_RLBase::run()
 
     if (env->fixed_command_enabled)
     {
-        auto& joy = lowstate->joystick;
+        auto& joy = FSMState::effective_joystick();
         if (joy.LT.pressed && joy.Y.on_pressed)
         {
             env->fixed_command_active = !env->fixed_command_active;
