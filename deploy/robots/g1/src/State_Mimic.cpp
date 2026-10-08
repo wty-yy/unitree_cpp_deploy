@@ -6,36 +6,45 @@
 #include "isaaclab/envs/mdp/terminations.h"
 #include "FSM/state_preflight_utils.h"
 
-static Eigen::Quaternionf init_quat;
+static Eigen::Quaternionf init_quat = Eigen::Quaternionf::Identity();
 std::shared_ptr<State_Mimic::MotionLoader_> State_Mimic::motion = nullptr;
 
 namespace
 {
 
+Eigen::Quaternionf compose_torso_quat(
+    const Eigen::Quaternionf& root_quat, float waist_yaw, float waist_roll, float waist_pitch)
+{
+    return root_quat
+        * Eigen::AngleAxisf(waist_yaw, Eigen::Vector3f::UnitZ())
+        * Eigen::AngleAxisf(waist_roll, Eigen::Vector3f::UnitX())
+        * Eigen::AngleAxisf(waist_pitch, Eigen::Vector3f::UnitY());
+}
+
 Eigen::Quaternionf torso_quat_w(isaaclab::ManagerBasedRLEnv* env)
 {
-    using G1Type = unitree::BaseArticulation<LowState_t::SharedPtr>;
-    G1Type* robot = dynamic_cast<G1Type*>(env->robot.get());
-
-    auto root_quat = env->robot->data.root_quat_w;
-    auto& motors = robot->lowstate->msg_.motor_state();
-
-    Eigen::Quaternionf torso_quat = root_quat
-        * Eigen::AngleAxisf(motors[12].q(), Eigen::Vector3f::UnitZ())
-        * Eigen::AngleAxisf(motors[13].q(), Eigen::Vector3f::UnitX())
-        * Eigen::AngleAxisf(motors[14].q(), Eigen::Vector3f::UnitY());
-    return torso_quat;
+    const auto& data = env->robot->data;
+    auto sdk_joint = [&](int sdk_id) {
+        const auto it = std::find(data.joint_ids_map.begin(), data.joint_ids_map.end(), sdk_id);
+        return data.joint_pos[std::distance(data.joint_ids_map.begin(), it)];
+    };
+    return compose_torso_quat(data.root_quat_w, sdk_joint(12), sdk_joint(13), sdk_joint(14));
 }
 
 Eigen::Quaternionf anchor_quat_w(std::shared_ptr<State_Mimic::MotionLoader_> loader)
 {
     const auto root_quat = loader->root_quaternion();
     const auto joint_pos = loader->joint_pos();
-    Eigen::Quaternionf torso_quat = root_quat
-        * Eigen::AngleAxisf(joint_pos[12], Eigen::Vector3f::UnitZ())
-        * Eigen::AngleAxisf(joint_pos[13], Eigen::Vector3f::UnitX())
-        * Eigen::AngleAxisf(joint_pos[14], Eigen::Vector3f::UnitY());
-    return torso_quat;
+    return compose_torso_quat(root_quat, joint_pos[12], joint_pos[13], joint_pos[14]);
+}
+
+Eigen::Quaternionf z_axis_yaw_alignment(const Eigen::Quaternionf& reference, const Eigen::Quaternionf& robot)
+{
+    // Compute heading from the torso +Z axis projected onto the world XY plane.
+    const Eigen::Vector3f ref_z_axis = reference * Eigen::Vector3f::UnitZ();
+    const Eigen::Vector3f robot_z_axis = robot * Eigen::Vector3f::UnitZ();
+    const float angle = std::atan2(robot_z_axis.y(), robot_z_axis.x()) - std::atan2(ref_z_axis.y(), ref_z_axis.x());
+    return Eigen::Quaternionf(Eigen::AngleAxisf(angle, Eigen::Vector3f::UnitZ()));
 }
 
 } // namespace
@@ -90,9 +99,10 @@ REGISTER_OBSERVATION(motion_command)
 
     auto vel_dfs = loader->joint_vel();
     Eigen::VectorXf vel_bfs = Eigen::VectorXf::Zero(vel_dfs.size());
+    const float joint_vel_scale = params["joint_vel_scale"] ? params["joint_vel_scale"].as<float>() : 1.0f;
     for (int i = 0; i < vel_dfs.size(); ++i)
     {
-        vel_bfs(i) = vel_dfs[ids[i]];
+        vel_bfs(i) = vel_dfs[ids[i]] * joint_vel_scale;
     }
 
     std::vector<float> data;
@@ -155,6 +165,8 @@ State_Mimic::State_Mimic(int state_mode, std::string state_string)
 
     auto articulation = std::make_shared<unitree::BaseArticulation<LowState_t::SharedPtr>>(FSMState::lowstate);
 
+    joint_vel_reference_ = cfg["joint_vel_reference"] && cfg["joint_vel_reference"].as<bool>();
+    z_axis_yaw_projection_ = cfg["z_axis_yaw_projection"] && cfg["z_axis_yaw_projection"].as<bool>();
     motion_fps_ = cfg["fps"] ? cfg["fps"].as<float>() : 30.0f;
     if (motion_fps_ <= 0.0f)
     {
@@ -267,10 +279,17 @@ void State_Mimic::reset_motion_state()
     reference_time_.store(time_range_[0]);
     motion_finished_.store(false);
 
-    auto ref_yaw = isaaclab::yawQuaternion(motion_->root_quaternion()).toRotationMatrix();
-    auto robot_yaw = isaaclab::yawQuaternion(torso_quat_w(env_.get())).toRotationMatrix();
-    init_quat = robot_yaw * ref_yaw.transpose();
     motion_->reset(env_->robot->data, time_range_[0]);
+    if (z_axis_yaw_projection_)
+    {
+        init_quat = z_axis_yaw_alignment(anchor_quat_w(motion_), torso_quat_w(env_.get()));
+    }
+    else
+    {
+        auto ref_yaw = isaaclab::yawQuaternion(motion_->root_quaternion()).toRotationMatrix();
+        auto robot_yaw = isaaclab::yawQuaternion(torso_quat_w(env_.get())).toRotationMatrix();
+        init_quat = robot_yaw * ref_yaw.transpose();
+    }
     env_->reset();
 }
 
@@ -282,7 +301,7 @@ void State_Mimic::load_motion(const std::filesystem::path& motion_file, bool emi
         resolved = (param::proj_dir / resolved).lexically_normal();
     }
 
-    motion_ = std::make_shared<MotionLoader_>(resolved.string(), motion_fps_);
+    motion_ = std::make_shared<MotionLoader_>(resolved.string(), motion_fps_, joint_vel_reference_);
     motion = motion_;
 
     time_range_[0] = has_time_start_
@@ -355,33 +374,42 @@ void State_Mimic::stop_policy_thread()
     }
 }
 
-State_Mimic::MotionLoader_::MotionLoader_(std::string motion_file, float fps)
-    : dt(1.0f / fps)
+State_Mimic::MotionLoader_::MotionLoader_(std::string motion_file, float fps, bool joint_vel_reference)
+    : dt(1.0f / fps), joint_vel_reference_(joint_vel_reference)
 {
-    auto loader = isaaclab::MotionLoader(motion_file, fps);
+    auto loader = isaaclab::MotionLoader(motion_file, fps, joint_vel_reference);
     num_frames = loader.num_frames;
     duration = loader.duration;
     root_positions = std::move(loader.root_positions);
     root_quaternions = std::move(loader.root_quaternions);
     dof_positions = std::move(loader.dof_positions);
     dof_velocities = std::move(loader.dof_velocities);
+    if (joint_vel_reference_)
+    {
+        duration = (num_frames - 1) * dt;
+    }
     update(0.0f);
 }
 
 void State_Mimic::MotionLoader_::update(float time)
 {
+    if (joint_vel_reference_)
+    {
+        const float frame = std::clamp(time / dt, 0.0f, static_cast<float>(num_frames - 1));
+        index_0_ = static_cast<int>(std::floor(frame));
+        index_1_ = std::min(index_0_ + 1, num_frames - 1);
+        blend_ = frame - index_0_;
+        return;
+    }
     float phase = std::clamp(time / duration, 0.0f, 1.0f);
     index_0_ = std::round(phase * (num_frames - 1));
     index_1_ = std::min(index_0_ + 1, num_frames - 1);
     blend_ = std::round((time - index_0_ * dt) / dt * 1e5f) / 1e5f;
 }
 
-void State_Mimic::MotionLoader_::reset(const isaaclab::ArticulationData& data, float t)
+void State_Mimic::MotionLoader_::reset(const isaaclab::ArticulationData&, float t)
 {
     update(t);
-    auto init_to_anchor = isaaclab::yawQuaternion(this->root_quaternion()).toRotationMatrix();
-    auto world_to_anchor = isaaclab::yawQuaternion(data.root_quat_w).toRotationMatrix();
-    world_to_init_ = world_to_anchor * init_to_anchor.transpose();
 }
 
 Eigen::VectorXf State_Mimic::MotionLoader_::joint_pos()

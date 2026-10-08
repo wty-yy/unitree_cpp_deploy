@@ -26,11 +26,10 @@ inline Eigen::Quaternionf yawQuaternion(const Eigen::Quaternionf& q) {
 class MotionLoader
 {
 public:
-    MotionLoader(std::string motion_file, float fps = 50.0f)
+    MotionLoader(std::string motion_file, float fps = 50.0f, bool joint_vel_reference = false)
     : dt(1.0f / fps)
     {
         auto data = _read_csv(motion_file);
-        
         num_frames = data.size();
         duration = num_frames * dt;
         
@@ -38,9 +37,17 @@ public:
         {
             root_positions.push_back(Eigen::VectorXf::Map(data[i].data(), 3));
             root_quaternions.push_back(Eigen::Quaternionf(data[i][6],data[i][3], data[i][4], data[i][5]));
-            dof_positions.push_back(Eigen::VectorXf::Map(data[i].data() + 7, data[i].size() - 7));
+            const int num_joints = joint_vel_reference ? 29 : data[i].size() - 7;
+            dof_positions.push_back(Eigen::VectorXf::Map(data[i].data() + 7, num_joints));
+            if (joint_vel_reference)
+            {
+                dof_velocities.push_back(Eigen::VectorXf::Map(data[i].data() + 36, num_joints));
+            }
         }
-        dof_velocities = _comupte_raw_derivative(dof_positions);
+        if (!joint_vel_reference)
+        {
+            dof_velocities = _comupte_raw_derivative(dof_positions);
+        }
 
         update(0.0f);
     }

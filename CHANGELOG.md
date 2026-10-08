@@ -1,4 +1,9 @@
 # CHANGELOG
+
+## 20261009 v0.6.7
+
+1. 新增`BeyondMimic`中`joint_vel_reference`和`z_axis_yaw_projection`的配置项
+
 ## 20261007 v0.6.6
 1. 新增Boost支持`boost_button: RT`，`commands.base_velocity.boost.ranges`下做boost模型下的最大速度配置
 2. 新增`enable_bad_orientation_check: false`开关，默认为true

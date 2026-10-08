@@ -42,6 +42,8 @@ private:
     std::atomic<float> reference_time_{0.0f};
     int finished_state_id_{0};
     float motion_fps_{30.0f};
+    bool joint_vel_reference_{false};
+    bool z_axis_yaw_projection_{false};
     bool has_time_start_{false};
     bool has_time_end_{false};
     float configured_time_start_{0.0f};
@@ -51,7 +53,7 @@ private:
 class State_Mimic::MotionLoader_
 {
 public:
-    MotionLoader_(std::string motion_file, float fps);
+    MotionLoader_(std::string motion_file, float fps, bool joint_vel_reference = false);
 
     void update(float time);
     void reset(const isaaclab::ArticulationData& data, float t = 0.0f);
@@ -70,9 +72,8 @@ public:
     std::vector<Eigen::VectorXf> dof_positions;
     std::vector<Eigen::VectorXf> dof_velocities;
 
-    Eigen::Matrix3f world_to_init_;
-
 private:
+    bool joint_vel_reference_{false};
     int index_0_{0};
     int index_1_{0};
     float blend_{0.0f};
