@@ -202,7 +202,7 @@ State_Mimic::State_Mimic(int state_mode, std::string state_string)
 
     const std::string finished_state = cfg["finished_transition"]
         ? cfg["finished_transition"].as<std::string>()
-        : "Velocity_Y";
+        : "Passive";
     if (!FSMStringMap.right.count(finished_state))
     {
         throw std::runtime_error("State_Mimic: unknown finished_transition target " + finished_state);
