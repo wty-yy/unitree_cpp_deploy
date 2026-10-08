@@ -38,23 +38,6 @@ REGISTER_OBSERVATION(keyboard_velocity_commands)
 
 namespace
 {
-std::vector<joint_filter::JointFilterConfig> default_velocity_q_target_filters(std::size_t dof)
-{
-    const auto waist_joint_indices = joint_filter::default_waist_joint_indices(dof);
-    if (waist_joint_indices.empty())
-    {
-        return {};
-    }
-
-    joint_filter::JointFilterConfig filter_cfg;
-    filter_cfg.enabled = true;
-    filter_cfg.type = joint_filter::JointFilterType::Lpf;
-    filter_cfg.has_joint_indices = true;
-    filter_cfg.joint_indices = waist_joint_indices;
-    filter_cfg.lpf.alpha = 0.7f;
-    return {filter_cfg};
-}
-
 bool logging_option_enabled(const YAML::Node& cfg, const std::string& key, bool default_value = true)
 {
     if (cfg["logging_options"] && cfg["logging_options"][key])
@@ -134,11 +117,7 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
     }
     else
     {
-        action_filter_.configure(
-            default_velocity_q_target_filters(dof),
-            dof,
-            filter_name,
-            joint_filter::default_waist_joint_indices(dof));
+        action_filter_.configure(YAML::Node{}, dof, filter_name);
     }
 
     const bool enable_bad_orientation_check = cfg["enable_bad_orientation_check"]

@@ -3,6 +3,7 @@
 ## 20261009 v0.6.7
 
 1. 新增`BeyondMimic`中`joint_vel_reference`和`z_axis_yaw_projection`的配置项
+2. 删除默认的`joint_filters.q_target.enabled=true`
 
 ## 20261007 v0.6.6
 1. 新增Boost支持`boost_button: RT`，`commands.base_velocity.boost.ranges`下做boost模型下的最大速度配置
