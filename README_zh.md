@@ -1,11 +1,45 @@
 <div align="center">
   <h1>Go2 RL CPP Deploy</h1>
-  <p><a href="README.md">English</a> | <strong>中文</strong></p>
+  <p><a href="README.md">🌎 English</a> | <strong>🇨🇳 中文</strong></p>
 </div>
 
-在 Unitree Go2 Edu 上部署强化学习策略，可在 Orin NX 上运行，也可通过以太网连接外部电脑。代码基于 [unitree_rl_lab](https://github.com/unitreerobotics/unitree_rl_lab) 修改。
+在 Unitree Go2 Edu 上部署强化学习策略，可在 Orin NX 上运行，也可通过以太网连接外部电脑。参考 [unitree_rl_lab](https://github.com/unitreerobotics/unitree_rl_lab)。适用于 [go2_rl_lab](https://github.com/wty-yy/go2_rl_lab) 仓库模型的真机部署。
 
-## 安装与编译
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="33%" align="center"><div align="center">台阶</div></th>
+      <th width="33%" align="center"><div align="center">前进 3.5 m/s，后退 4.4 m/s</div></th>
+      <th width="33%" align="center"><div align="center">奔跑（俯视）</div></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="center"><img width="100%" alt="真机台阶演示" src="https://raw.githubusercontent.com/wty-yy/picture-bed/master/go2_rl_lab/real/forward_stairs_DJI_20261017144009_0111_D_encoded.gif" /></td>
+      <td align="center"><img width="100%" alt="真机前进与后退演示" src="https://raw.githubusercontent.com/wty-yy/picture-bed/master/go2_rl_lab/real/forward_backward_1x_then_0.5x.gif" /></td>
+      <td align="center"><img width="100%" alt="真机快速奔跑演示" src="https://raw.githubusercontent.com/wty-yy/picture-bed/master/go2_rl_lab/real/overlook_fastrun_DJI_20261017143527_0110_D_encoded.gif" /></td>
+    </tr>
+  </tbody>
+</table>
+
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="50%" align="center"><div align="center">斜坡</div></th>
+      <th width="50%" align="center"><div align="center">楼梯间</div></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="center"><img width="100%" alt="真机斜坡行走演示" src="https://raw.githubusercontent.com/wty-yy/picture-bed/master/go2_rl_lab/real/slope_DJI_20261017142100_0108_D_encoded.gif" /></td>
+      <td align="center"><img width="100%" alt="真机楼梯间行走演示" src="https://raw.githubusercontent.com/wty-yy/picture-bed/master/go2_rl_lab/real/stairwell_DJI_20261017145051_0117_D_encoded.gif" /></td>
+    </tr>
+  </tbody>
+</table>
+
+> 上述所有演示均由 [go2_mixed_moe_cts_v1.3.2resume_74k_0.687](logs/go2/go2_rl_lab/go2_mixed_moe_cts_v1.3.2resume_74k_0.687) 单一模型实现，使用 `Start + Up` 切换。
+
+## 📦 安装与编译
 
 ```bash
 # 安装依赖和 Git LFS
@@ -20,10 +54,10 @@ git lfs pull
 
 安装 [unitree_sdk2](https://github.com/unitreerobotics/unitree_sdk2)，将对应架构的 ONNX Runtime 解压到 `deploy/thirdparty/`。
 
-| 部署平台 | ONNX Runtime |
-|---|---|
-| Orin NX | [aarch64 1.16.0](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2) |
-| x64 Linux | [x64 1.24.2](https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-linux-x64-gpu-1.24.2.tgz) |
+| 部署平台 | ONNX Runtime | 解压路径 |
+|---|---|---|
+| Orin NX | [aarch64 1.16.0](https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.16.0/onnxruntime-linux-aarch64-gpu-1.16.0.tar.bz2) | deploy/thirdparty/onnxruntime-linux-aarch64-gpu-1.16.0 |
+| x64 Linux | [x64 1.24.2](https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-linux-x64-gpu-1.24.2.tgz) | deploy/thirdparty/onnxruntime-linux-x64-gpu-1.24.2 |
 
 CMake 会自动选择对应架构的 ONNX Runtime。
 
@@ -34,9 +68,9 @@ cd deploy/robots/go2
 cmake -B build && cmake --build build -j$(nproc)
 ```
 
-## 运行
+## 🚀 运行
 
-### Real Hardware
+### 🤖 Real Hardware
 
 真机部署时，先使用官方遥控器按两次 L2 + A，使机器人趴下。随后启动本运控程序，程序会自动停止官方运控并接管控制。
 
@@ -45,7 +79,7 @@ cmake -B build && cmake --build build -j$(nproc)
 ./build/go2_ctrl -n eth0
 ```
 
-### MuJoco Simulator
+### 🖥️ MuJoco Simulator
 
 参考 [unitree_mujoco（go2 分支）](https://github.com/wty-yy/unitree_mujoco/tree/go2) 中的安装方法。完成安装后，先启动仿真器，再在另一终端启动控制程序：
 
@@ -57,7 +91,7 @@ cmake -B build && cmake --build build -j$(nproc)
 ./build/go2_ctrl -n lo
 ```
 
-### 按键操作
+### 🎮 按键操作
 
 | 按键 | 功能 |
 |---|---|
@@ -75,7 +109,9 @@ cmake -B build && cmake --build build -j$(nproc)
 
 https://github.com/user-attachments/assets/d27f4d4b-208e-4212-b829-ad835e53c162
 
-## 策略
+## 🛠️ 使用
+
+### 🧠 策略
 
 五个策略位于 [logs/go2/](logs/go2/)，每个包含 `exported/policy.onnx` 和 `params/deploy.yaml`。ONNX 通过 Git LFS 管理。
 
@@ -89,6 +125,8 @@ https://github.com/user-attachments/assets/d27f4d4b-208e-4212-b829-ad835e53c162
 
 `go2_rl_robotlab` 作为额外 checkpoint 保留。使用时将对应状态的 `policy_dir` 指向该目录。
 
+#### ⚡ 加速模式
+
 普通速度范围由各模型 `params/deploy.yaml` 中的 `commands.base_velocity.ranges` 定义。Up、Left 和 Right 还配置了 `boost.ranges`：
 
 | 状态 | 纵向（m/s） | 横向（m/s） | 转向（rad/s） | YAML 路径 |
@@ -101,7 +139,7 @@ https://github.com/user-attachments/assets/d27f4d4b-208e-4212-b829-ad835e53c162
 
 策略目录相对于 [deploy/robots/go2/](deploy/robots/go2/) 解析。替换模型时同步更新 `policy.onnx` 和 `deploy.yaml`。
 
-## 配置与工具
+### ⚙️ 配置与工具
 
 [config.yaml](deploy/robots/go2/config/config.yaml) 的 `Velocity_Right` 下提供以下可选配置，将对应配置中的 `enabled` 设为 `true` 即可启用，可按需复制到其他 FSM 状态。
 
@@ -114,6 +152,22 @@ https://github.com/user-attachments/assets/d27f4d4b-208e-4212-b829-ad835e53c162
 
 FSM 和按键配置见 [robot_params.md](docs/robot_params.md)，观测分组见 [obs_group.md](docs/obs_group.md)。其他资源：[可视化脚本](deploy/tools/) 和 [Go2 URDF](resources/go2.urdf)。
 
-## 许可证
+## 📄 许可证
 
 项目自有代码采用 [MIT 许可证](LICENSE)。Unitree 派生代码的 Apache 2.0 条款见 [Unitree RL Lab 许可证](docs/licenses/unitree-rl-lab-license.txt)。
+
+## 📚 引用
+
+如果您觉得模型策略有用，请引用：
+
+```bibtex
+@INPROCEEDINGS{WuT-RSS-26,
+    AUTHOR    = {Tianyang Wu AND Hanwei Guo AND Yuhang Wang AND Junshu Yang AND Xinyang Sui AND Jiayi Xie AND Xingyu Chen AND Zeyang Liu AND Xuguang Lan},
+    TITLE     = {{Toward Reliable Sim-to-Real Predictability for MoE-based Robust Quadrupedal Locomotion}},
+    BOOKTITLE = {Proceedings of Robotics: Science and Systems},
+    YEAR      = {2026},
+    ADDRESS   = {Sydney, Australia},
+    MONTH     = {July},
+    DOI       = {10.15607/RSS.2026.XXII.156}
+}
+```
