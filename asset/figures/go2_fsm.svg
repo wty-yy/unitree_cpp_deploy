@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="616" height="256" viewBox="0 0 616 256" role="img" aria-labelledby="title desc">
+<title id="title">Go2 button controls and state transitions</title>
+<desc id="desc">Passive to FixStand with L2+A; FixStand and FixSquat switch both ways with L2+A. Start plus direction selects or switches a velocity policy. L2+A moves a policy to FixSquat. A completed squat returns to Passive. L2+B returns any active state to Passive.</desc>
+<rect width="616" height="256" fill="white"/>
+<defs>
+  <marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto-start-reverse"><path d="M0,0 L7,3.5 L0,7 Z" fill="#475569"/></marker>
+  <marker id="auto" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="#7c3aed"/></marker>
+</defs>
+<g font-family="DejaVu Sans, sans-serif" fill="#0f172a">
+<rect x="32" y="20" width="124" height="48" rx="7" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.4"/>
+<text x="94.0" y="41" text-anchor="middle" font-size="18" fill="#0f172a">Passive</text>
+<text x="94.0" y="59" text-anchor="middle" font-size="12" fill="#334155">Damping</text>
+<rect x="280" y="20" width="132" height="48" rx="7" fill="#dbeafe" stroke="#60a5fa" stroke-width="1.4"/>
+<text x="346.0" y="41" text-anchor="middle" font-size="18" fill="#0f172a">FixStand</text>
+<text x="346.0" y="59" text-anchor="middle" font-size="12" fill="#334155">Stand</text>
+<rect x="280" y="162" width="194" height="48" rx="7" fill="#dcfce7" stroke="#4ade80" stroke-width="1.4"/>
+<text x="377.0" y="183" text-anchor="middle" font-size="18" fill="#0f172a">Velocity_*</text>
+<text x="377.0" y="201" text-anchor="middle" font-size="12" fill="#334155">Up / Down / Left / Right</text>
+<rect x="32" y="162" width="124" height="48" rx="7" fill="#ffedd5" stroke="#fb923c" stroke-width="1.4"/>
+<text x="94.0" y="183" text-anchor="middle" font-size="18" fill="#0f172a">FixSquat</text>
+<text x="94.0" y="201" text-anchor="middle" font-size="12" fill="#334155">Squat</text>
+<circle cx="10" cy="44" r="4" fill="#475569"/>
+<path d="M14 44 H32" fill="none" stroke="#475569" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M156 44 H280" fill="none" stroke="#475569" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="218" y="32" text-anchor="middle" font-size="14" fill="#334155">L2 + A</text>
+<path d="M370 68 V162" fill="none" stroke="#475569" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="431" y="106" text-anchor="middle" font-size="14" fill="#334155">Start +</text>
+<text x="431" y="124" text-anchor="middle" font-size="14" fill="#334155">direction</text>
+<path d="M280 186 H156" fill="none" stroke="#475569" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="218" y="174" text-anchor="middle" font-size="14" fill="#334155">L2 + A</text>
+<path d="M296 68 L156 162" fill="none" stroke="#475569" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+<text x="220" y="101" text-anchor="middle" font-size="14" fill="#334155" transform="rotate(-33.9 220 101)">L2 + A</text>
+<path d="M46 162 V68" fill="none" stroke="#7c3aed" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#auto)"/>
+<text x="104" y="108" text-anchor="middle" font-size="13" fill="#7c3aed">Trajectory</text>
+<text x="104" y="126" text-anchor="middle" font-size="13" fill="#7c3aed">complete</text>
+<path d="M474 176 H554 V196 H474" fill="none" stroke="#475569" stroke-width="1.6" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="545" y="133" text-anchor="middle" font-size="13" fill="#334155">Start + direction</text>
+<text x="545" y="151" text-anchor="middle" font-size="13" fill="#334155">Switch policy</text>
+<rect x="12" y="224" width="592" height="26" rx="6" fill="#f1f5f9"/>
+<text x="308" y="242" text-anchor="middle" font-size="13" fill="#334155">L2 + B: FixStand / Velocity_* / FixSquat → Passive</text>
+</g>
+</svg>
