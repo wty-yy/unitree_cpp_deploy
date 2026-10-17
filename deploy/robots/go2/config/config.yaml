@@ -1,0 +1,120 @@
+FSM:
+  _: # enabled fsms
+    Passive:
+      id: 1
+    FixStand:
+      id: 2
+      type: Fix
+    FixSquat:
+      id: 3
+      type: Fix
+    Velocity_Up:
+      id: 4
+      type: RLBase
+    Velocity_Down:
+      id: 5
+      type: RLBase
+    Velocity_Left:
+      id: 6
+      type: RLBase
+    Velocity_Right:
+      id: 7
+      type: RLBase
+
+  Passive:
+    transitions:
+      FixStand: LT + A.on_pressed
+    mode: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    kd: [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+  FixStand:
+    transitions:
+      Passive: LT + B.on_pressed
+      FixSquat: LT + A.on_pressed
+      Velocity_Up: start + up
+      Velocity_Down: start + down
+      Velocity_Left: start + left
+      Velocity_Right: start + right
+    kp: [60, 80, 80, 60, 80, 80, 60, 80, 80, 60, 80, 80]
+    kd: [5, 4, 4, 5, 4, 4, 5, 4, 4, 5, 4, 4]
+    ts: [0, 1, 2]
+    qs: [
+      [],
+      [0.0, 1.36, -2.65, 0.0, 1.36, -2.65, 0.0, 1.36, -2.65, 0.0, 1.36, -2.65],
+      [0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5],
+    ]
+  FixSquat:
+    transitions:
+      Passive: LT + B.on_pressed
+      FixStand: LT + A.on_pressed
+    auto_transition: Passive
+    kp: [60, 80, 80, 60, 80, 80, 60, 80, 80, 60, 80, 80]
+    kd: [5, 4, 4, 5, 4, 4, 5, 4, 4, 5, 4, 4]
+    ts: [0, 1, 2]
+    qs: [
+      [],
+      [0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5, 0., 0.8, -1.5],
+      [0.0, 1.36, -2.65, 0.0, 1.36, -2.65, 0.0, 1.36, -2.65, 0.0, 1.36, -2.65],
+    ]
+  Velocity_Up:
+    transitions:
+      Passive: LT + B.on_pressed
+      FixSquat: LT + A.on_pressed
+      Velocity_Down: start + down
+      Velocity_Left: start + left
+      Velocity_Right: start + right
+    policy_dir: ../../../logs/go2/go2_rl_lab/go2_mixed_moe_cts_v1.3.2resume_74k_0.687
+    boost_button: RT  # Default boost button is RT
+  Velocity_Down:
+    transitions:
+      Passive: LT + B.on_pressed
+      FixSquat: LT + A.on_pressed
+      Velocity_Up: start + up
+      Velocity_Left: start + left
+      Velocity_Right: start + right
+    policy_dir: ../../../logs/go2/go2_rl_gym/go2_moe_cts_164k_0.6715
+  Velocity_Left:
+    transitions:
+      Passive: LT + B.on_pressed
+      FixSquat: LT + A.on_pressed
+      Velocity_Up: start + up
+      Velocity_Down: start + down
+      Velocity_Right: start + right
+    policy_dir: ../../../logs/go2/go2_rl_lab/go2_mixed_moe_cts_v1.3_8192_89k
+  Velocity_Right:
+    transitions:
+      Passive: LT + B.on_pressed
+      FixSquat: LT + A.on_pressed
+      Velocity_Up: start + up
+      Velocity_Down: start + down
+      Velocity_Left: start + left
+    policy_dir: ../../../logs/go2/go2_rl_lab/go2_mixed_moe_cts_v1.3.2resume_82.5k_0.6929
+
+    ### Some optional parameters for specified RLBase FSM state ###
+    # Smooth longitudinal velocity commands and limit acceleration/deceleration
+    velocity_command_damping:
+      enabled: false
+      vx:
+        speed_points: [0.0, 1.0, 2.0, 4.0]
+        time_constants: [0.0, 0.0, 0.4, 0.6]
+        max_acceleration: 4.0
+        max_deceleration: 3.0
+
+    # Save runtime data as CSV files in the policy directory's logs/ subdirectory
+    logging:
+      enabled: false
+      dt: 0.01
+
+    # Toggle a preset velocity command with L2 + Y
+    fixed_command:
+      enabled: false
+      lin_vel_x: 1.0
+      lin_vel_y: 0.0
+      ang_vel_z: 0.0
+      duration: 3.5
+
+    # Stream the 12 measured joint positions over UDP in SDK motor order
+    joint_pos_udp:
+      enabled: false
+      host: 192.168.1.255
+      port: 15000
+      dt: 0.1

@@ -1,0 +1,120 @@
+# UPDATE
+
+## 20261017
+1. 保留五个 Go2 策略，ONNX 使用 Git LFS 管理
+2. 新增 `boost_button`，按住 `RT` 使用模型的 boost 指令范围
+3. 精简 Go2 部署代码与依赖
+
+## 20260807 v0.6.6
+1. 新增`go2_moe_cts_v4.2_176k_0.6984`通用模型，`v0.1.8_fast_flat_40k`快速平地模型更稳定的步态
+2. 新增`VelocityCommandDamper`对高速移动的指令添加阻尼，避免高速指令的突然切换导致失控
+
+## 20260629 v0.6.5
+**新增L2+A缓慢蹲下的功能**
+1. 重新命名类`State_FixStand`为`State_Fix`，用于不同的固定姿态转换，新增模型切换到`L2+A`，从缓慢蹲下到Passive模式，避免直接Passive导致侧向倒下问题
+
+## 20260628 v0.6.4
+**新增UDP发送joint pos功能**
+1. 在[config.yaml](deploy/robots/go2/config/config.yaml)中打开`joint_pos_udp.enabled`字段, 并设置UDP发送的IP和端口, python接收用例为[udp_test.py](scripts/udp_test.py)
+
+## 20260331 v0.6.2
+**新增Go2 go2_moe_cts_flat_max4.5_71k模型**
+1. 通过Start+Down切换到该模型，删掉原先的模型，新模型也是开启自碰撞后训练，移动时双脚不容易打到对方
+## 20260326 v0.6.1
+**新增Go2 go2_moe_cts_self_103.5k_0.6669模型**
+1. 通过Start+Left切换到该模型，通过开启自碰撞后训练，移动时不易绊脚
+## 20260301 v0.4
+**重构 FSM 框架: 从硬编码转为 YAML 配置驱动，支持声明式状态注册和跳转**
+
+1. [BaseState.h](deploy/include/FSM/BaseState.h):
+    - 新增 `FsmFactory`/`FsmMap` 工厂类型定义和 `getFsmMap()` 全局工厂注册表
+    - 新增 `REGISTER_FSM(Derived)` 宏，在头文件中自动注册 FSM 状态类到工厂
+2. [CtrlFSM.h](deploy/include/FSM/CtrlFSM.h):
+    - 新增 `CtrlFSM(YAML::Node cfg)` 构造函数，从配置文件 `FSM._` 节自动读取状态声明（id/type），通过工厂创建状态实例
+    - 分离 `start()` 方法，支持先注册再启动
+    - 状态管理从裸指针改为 `std::shared_ptr<BaseState>`
+3. [FSMState.h](deploy/include/FSM/FSMState.h):
+    - 移除硬编码的 `L2+B → Passive` 转换逻辑
+    - 新增从 YAML `transitions` 节读取跳转条件，使用 DSL 解析器将字符串表达式编译为运行时谓词
+4. 新增 [unitree_joystick_dsl.hpp](deploy/include/unitree_joystick_dsl.hpp):
+    - 手柄按键组合 DSL 解析器，支持 `+`(AND)、`|`(OR)、`!`(NOT)、`()`分组、`.on_pressed`/`.on_released`/`.pressed` 状态检测、`LT(2s)` 长按检测
+5. [State_Fix.h](deploy/include/FSM/State_Fix.h) / [State_Passive.h](deploy/include/FSM/State_Passive.h) / [State_RLBase.h](deploy/include/FSM/State_RLBase.h):
+    - 构造函数统一为 `(int state, std::string state_string)` 签名
+    - 添加 `REGISTER_FSM` 宏注册
+    - `State_RLBase` 移除 `policy_key`/`config_name` 参数，改为从 `FSM.{state_string}.policy_dir` 读取
+6. robots/go2 适配:
+    - `Types.h` 移除 `FSMMode` 枚举，状态 ID 改由 config.yaml 定义
+    - `main.cpp` 用 `CtrlFSM(param::config["FSM"])` + `fsm->start()` 替代手动创建和注册
+    - `State_RLBase.cpp` 适配新构造函数，用 `FSMStringMap.right.at("Passive")` 替代枚举
+    - `config.yaml` 新增 `_` 节声明状态和 `transitions` 节定义跳转条件
+7. 详细配置使用方法见 [docs/robot_params.md](docs/robot_params.md)
+
+## 20260216 v0.3
+**新增观测分组与多输入模型支持**
+1. [manager_term_cfg.h](deploy/include/isaaclab/manager/manager_term_cfg.h):
+    - 新增 `get(int n)` 方法返回单帧数据, 修复 gym-style history 叠帧 bug (原 `get()` 返回全帧拼接, 外层再循环导致 5×5 膨胀)
+    - `ObsFunc` 签名增加 `YAML::Node params` 参数
+    - scale/clip 处理从 `get()` 移到 `add()` 中, 新增 `scale_first` 选项
+    - 新增 `params` 成员存储 term 配置, 新增 `size()` 方法
+2. [observation_manager.h](deploy/include/isaaclab/manager/observation_manager.h):
+    - 支持 observation group: 底层存储改为 `unordered_map<string, vector<ObservationTermCfg>>`, `compute()` 返回 `unordered_map<string, vector<float>>`
+    - gym-history 分支改用 `term.get(h)` 取单帧, 修复维度膨胀
+    - `REGISTER_OBSERVATION` 宏签名增加 `params` 参数
+    - 新增 `_prepare_group_terms()`, 自动识别单 group (flat) / 多 group 配置格式
+3. [algorithms.h](deploy/include/isaaclab/algorithms/algorithms.h):
+    - `act()` / `forward()` 入参从 `vector<float>` 改为 `unordered_map<string, vector<float>>`
+    - `OrtRunner` 动态检测所有模型 input 名称和 shape, 不再硬编码 `input_names={"obs"}`
+    - 支持多 input tensor 推理
+4. [observations.h](deploy/include/isaaclab/envs/mdp/observations/observations.h):
+    - 所有 term 处理函数签名增加 `YAML::Node params` 参数, 对应 `item["params"]` 内容, 从中读取配置参数
+    - `joint_pos`/`joint_pos_rel`/`joint_vel_rel` 改为从 `params["asset_cfg"]["joint_ids"]` 读取 `joint_ids`
+    - `gait_phase` 改为从 `params["period"]` 读取周期
+5. 新增[Observation Group](./docs/obs_group.md)使用说明
+
+## 20260211 v0.2.2
+1. SportModeState 高层估计，真机上没有用删掉
+## 20260210 v0.2.1
+1. 修改moe模型命名为go2_moe_cts_137k_0.6739
+## 20260125 v0.2
+1. 添加固定指令执行功能:
+    - 在[config.yaml](deploy/robots/go2/config/config.yaml)的`fixed_command.enabled`字段打开该功能, 并设置固定指令值
+    - 在真机上通过按键组合`L2 + Y`启动固定指令执行，并再次按下该组合键停止执行固定指令
+    - `fixed_command`如果设置了默认执行时间`duration`，则在启动后会持续执行该指令一段时间后自动停止
+2. 新增四种模型选择, 删除原有的`Start`启动模型按键:
+    - Velocity_Up: 通过按键组合`Start + Up`切换到该模型, 使用`policy_dir_up`中的模型文件
+    - Velocity_Down: 通过按键组合`Start + Down`切换到该模型, 使用`policy_dir_down`中的模型文件
+    - Velocity_Left: 通过按键组合`Start + Left`切换到该模型, 使用`policy_dir_left`中的模型文件
+    - Velocity_Right: 通过按键组合`Start + Right`切换到该模型, 使用`policy_dir_right`中的模型文件
+3. 进入模型方法: L2 + A站立, start + 方向键选择模型, 随时可start + 方向键切换模型, L2 + B进入阻尼模式
+## 20251208 v0.1
+1. 新增运行时数据记录功能:
+    - 在[config.yaml](deploy/robots/go2/config/config.yaml)的`logging`打开该功能, 及记录频率`logging_dt`
+    - 实现 `DataLogger` 类, 支持CSV格式数据保存存储在 `{policy_dir}/logs` 下, `State_RLBase` 中集成日志记录, 涵盖:
+    ```bash
+    "time": 当前程序启动时长
+    "unix_time": 时间戳 (精度0.1s)
+    "wall_time": H:M:S 时间字符串 (精度0.1s)
+    "q_des": 目标关节位置 12
+    "q": 实际关节位置 12 
+    "dq": 实际关节速度 12
+    "tau": 关节力矩 (PD计算出的力矩) 12
+    "temperatures": 全部关节电机温度 12
+    "imu_rpy": imu的roll,pitch,yaw 3
+    "imu_acc": imu加速度 (评估冲击) 3
+    "ang_vel": imu陀螺仪 (角速度) 3
+    "foot_force": 足端接触力 4
+    "foot_contacts": 足端接触状态 4
+
+    # MoE Model
+    "weight": 8
+    "latent": student encoder输出的潜空间向量 32
+    "cmd_vel_x_no_scale": 范围(0,1)的x线速度指令 1
+    "cmd_vel_y_no_scale": 范围(0,1)的y线速度指令 1
+    "cmd_ang_z_no_scale": 范围(0,1)的z角速度指令 1
+
+    # SportModeState 高层估计 （没有用删掉）
+    "position": 里程计估计的位置 3
+    "velocity": 里程计估计的速度 3
+    ```
+    - 修改扩大指令范围逻辑, 只需修改`base_velocity.ranges`, 即将手柄的(-1,1)缩放到该指令范围, 无需再对`velocity_commands.scale`修改
+2. ONNX推理逻辑修改: 修改 `OrtRunner` 类，新增 `forward()` 接口，支持多输出推理，解决隐藏状态提取问题

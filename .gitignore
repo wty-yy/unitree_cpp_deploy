@@ -1,0 +1,10 @@
+build/
+onnxruntime-linux-*/
+log/
+logs/**/logs/
+logs/**/*.csv
+logs/**/*.pt
+images/
+__pycache__/
+.vscode/
+mytest*
