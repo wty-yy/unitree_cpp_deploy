@@ -30,11 +30,6 @@ public:
     static bool accepts_external_velocity(const std::string& state) {
         return state == "Velocity_X" || state == "Velocity_A";
     }
-    struct MotorHealth {
-        uint32_t motorstate = 0;
-        std::array<int16_t, 2> temperature_c{};
-    };
-    using MotorHealthSample = std::array<MotorHealth, 29>;
     static ExternalVelocity& instance() {
         static ExternalVelocity bridge;
         return bridge;
@@ -162,16 +157,6 @@ public:
         has_axes = virtual_has_axes_;
         axes = virtual_axes_;
         return true;
-    }
-
-    void update_motor_health(uint32_t tick, const MotorHealthSample& sample) {
-        std::lock_guard<std::mutex> guard(mutex_);
-        // Re-reading the same DDS sample does not make its telemetry fresh.
-        if (motor_health_available_ && tick == motor_health_tick_) return;
-        motor_health_ = sample;
-        motor_health_tick_ = tick;
-        motor_health_updated_ = now();
-        motor_health_available_ = true;
     }
 
     bool sample(std::array<float, 3>& command) {
@@ -356,29 +341,8 @@ private:
                 {"virtual_buttons", virtual_buttons_},
                 {"velocity_ranges", {{"vx", ranges_[0]}, {"vy", ranges_[1]}, {"yaw_rate", ranges_[2]}}},
                 {"boost_active", boost_active_}, {"limits_ready", limits_ready_},
-                {"motor_health", motor_health_status()},
                 {"velocity", velocity_}, {"applied_velocity", applied_},
                 {"lease_remaining_s", std::max(0.0, deadline_ - now())}};
-    }
-
-    Json motor_health_status() const {
-        Json result = {{"available", motor_health_available_}, {"fresh", false},
-                       {"age_s", nullptr}, {"sample_tick", nullptr},
-                       {"error_count", nullptr}, {"motors", Json::array()}};
-        if (!motor_health_available_) return result;
-        const double age = std::max(0.0, now() - motor_health_updated_);
-        result["fresh"] = connected_ && now() - updated_ < 0.1 && age <= 0.5;
-        result["age_s"] = age;
-        result["sample_tick"] = motor_health_tick_;
-        int error_count = 0;
-        for (std::size_t i = 0; i < motor_health_.size(); ++i) {
-            const auto& motor = motor_health_[i];
-            if (motor.motorstate != 0) ++error_count;
-            result["motors"].push_back({{"id", i}, {"motorstate", motor.motorstate},
-                                         {"temperature_c", motor.temperature_c}});
-        }
-        result["error_count"] = error_count;
-        return result;
     }
 
     void serve() {
@@ -410,10 +374,6 @@ private:
     bool manual_ = false, connected_ = false, armed_ = false;
     bool boost_active_ = false, limits_ready_ = false;
     Ranges ranges_{};
-    MotorHealthSample motor_health_{};
-    bool motor_health_available_ = false;
-    uint32_t motor_health_tick_ = 0;
-    double motor_health_updated_ = 0;
     double updated_ = 0, deadline_ = 0;
     uint64_t sequence_ = 0, generation_ = 0;
     std::array<double, 3> velocity_{0, 0, 0};

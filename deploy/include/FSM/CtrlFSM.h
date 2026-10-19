@@ -221,20 +221,6 @@ private:
             std::abs(joy.ly()) > 0.12f || std::abs(joy.rx()) > 0.12f;
         robot_automation::ExternalVelocity::instance().update(
             currentState->getStateString(), manual, !FSMState::lowstate->isTimeout());
-
-        robot_automation::ExternalVelocity::MotorHealthSample motors;
-        uint32_t tick;
-        {
-            std::lock_guard<std::mutex> guard(FSMState::lowstate->mutex_);
-            const auto& sample = FSMState::lowstate->msg_;
-            tick = sample.tick();
-            for (std::size_t i = 0; i < motors.size(); ++i) {
-                motors[i].motorstate = sample.motor_state()[i].motorstate();
-                motors[i].temperature_c = sample.motor_state()[i].temperature();
-            }
-        }
-        // Never nest the DDS sample mutex with the bridge mutex.
-        robot_automation::ExternalVelocity::instance().update_motor_health(tick, motors);
     }
 
     bool is_disabled_state_(int state_id) const

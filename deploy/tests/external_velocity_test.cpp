@@ -39,49 +39,7 @@ void fresh_arm(Bridge& bridge, const Bridge::Ranges& ranges = base_ranges, bool 
     check(bridge.handle(request("arm"))["ok"], "fresh arm rejected");
 }
 
-void run_motor_health_tests(Bridge& bridge) {
-    auto health = bridge.handle(request("status"))["motor_health"];
-    check(!health["available"].get<bool>() && !health["fresh"].get<bool>(), "missing motor telemetry reported available");
-    check(health["age_s"].is_null() && health["sample_tick"].is_null() &&
-          health["error_count"].is_null() && health["motors"].empty(), "missing telemetry reported healthy");
-    bridge.update("Passive", false, true);
-    Bridge::MotorHealthSample sample{};
-    sample[11].motorstate = 512;
-    sample[11].temperature_c = {44, 91};
-    bridge.update_motor_health(100, sample);
-    health = bridge.handle(request("status"))["motor_health"];
-    check(health["available"] && health["fresh"] && health["sample_tick"] == 100, "fresh telemetry not reported");
-    check(health["error_count"] == 1 && health["motors"].size() == 29, "motor count or error count incorrect");
-    check(health["motors"][11]["id"] == 11 && health["motors"][11]["motorstate"] == 512 &&
-          health["motors"][11]["temperature_c"] == Json({44, 91}), "motor raw data changed");
-    sample[11].motorstate = 0;
-    bridge.update_motor_health(100, sample);
-    check(bridge.handle(request("status"))["motor_health"]["error_count"] == 1, "duplicate tick replaced sample");
-    bridge.update_motor_health(101, sample);
-    check(bridge.handle(request("status"))["motor_health"]["error_count"] == 0, "cleared motor fault was retained");
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    bridge.update_motor_health(101, sample);
-    std::this_thread::sleep_for(std::chrono::milliseconds(220));
-    bridge.update("Passive", false, true);
-    health = bridge.handle(request("status"))["motor_health"];
-    check(health["available"] && !health["fresh"].get<bool>() && health["age_s"].get<double>() >= 0.5,
-          "duplicate tick falsely refreshed telemetry");
-    check(health["motors"].size() == 29 && health["error_count"] == 0, "stale telemetry did not retain last values");
-    bridge.update_motor_health(102, sample);
-    bridge.update("Passive", false, false);
-    check(!bridge.handle(request("status"))["motor_health"]["fresh"].get<bool>(), "disconnected telemetry reported fresh");
-    bridge.update("Passive", false, true);
-    bridge.update_motor_health(103, sample);
-    check(bridge.handle(request("status"))["motor_health"]["fresh"], "recovered telemetry not fresh");
-    std::this_thread::sleep_for(std::chrono::milliseconds(110));
-    check(!bridge.handle(request("status"))["motor_health"]["fresh"].get<bool>(), "lost FSM heartbeat reported fresh telemetry");
-    bridge.update("Passive", false, true);
-    bridge.update_motor_health(0, sample);
-    check(bridge.handle(request("status"))["motor_health"]["sample_tick"] == 0, "tick reset not accepted");
-}
-
 void run_tests(Bridge& bridge) {
-    run_motor_health_tests(bridge);
     std::array<float, 3> output{};
     bridge.update("Passive", false, true);
     check(!bridge.handle(request("arm"))["ok"].get<bool>(), "Passive must reject arm");
@@ -245,10 +203,6 @@ void serve_test(Bridge& bridge, const std::string& path) {
     bool manual = false, connected = true, heartbeat = true;
     bool boost = false, ranges_available = true;
     auto ranges = base_ranges;
-    bool health_updates = true;
-    uint32_t sample_tick = 0;
-    Bridge::MotorHealthSample motors{};
-    for (auto& motor : motors) motor.temperature_c = {30, 35};
     bridge.update(state, manual, connected);
     bridge.start(path);
     std::thread fsm([&] {
@@ -256,7 +210,6 @@ void serve_test(Bridge& bridge, const std::string& path) {
             {
                 std::lock_guard<std::mutex> guard(state_mutex);
                 if (heartbeat) bridge.update(state, manual, connected);
-                if (heartbeat && health_updates) bridge.update_motor_health(++sample_tick, motors);
                 if (heartbeat && state == "Velocity_X") {
                     if (ranges_available) bridge.set_ranges(ranges, boost);
                     else bridge.invalidate_ranges();
@@ -282,14 +235,9 @@ void serve_test(Bridge& bridge, const std::string& path) {
         else if (line == "boost") { ranges = boost_ranges; boost = true; ranges_available = true; }
         else if (line == "asymmetric") { ranges = asymmetric_ranges; boost = false; ranges_available = true; }
         else if (line == "nolimits") ranges_available = false;
-        else if (line == "motor_fault") { motors[11].motorstate = 512; motors[11].temperature_c = {44, 91}; }
-        else if (line == "motor_clear") { motors[11].motorstate = 0; motors[11].temperature_c = {35, 40}; }
-        else if (line == "motor_stale") health_updates = false;
-        else if (line == "motor_fresh") health_updates = true;
         else if (line == "Velocity_X" || line == "Passive" || line == "Velocity_Y") state = line;
         else { std::cout << "ERROR unknown simulation command" << std::endl; continue; }
         if (heartbeat) bridge.update(state, manual, connected);
-        if (heartbeat && health_updates) bridge.update_motor_health(++sample_tick, motors);
         if (heartbeat && state == "Velocity_X") {
             if (ranges_available) bridge.set_ranges(ranges, boost);
             else bridge.invalidate_ranges();

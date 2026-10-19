@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 20261019 v0.6.8
+
+1. 删除外部速度桥中的电机遥测采集与上报，电机故障码和温度改由上层程序直接订阅 DDS `LowState` 获取
+2. 默认 `config.yaml` 注释 OmniXtreme 状态、切换按键及其配置
+3. 更新外部速度桥测试，移除电机遥测相关用例
+4. 更新 `38k` 的 `ang_vel_z` 范围：普通 `[-3.0, 3.0]`、boost `[-2.0, 2.0]` rad/s
+
 ## 20261009 v0.6.7
 
 1. 新增`BeyondMimic`中`joint_vel_reference`和`z_axis_yaw_projection`的配置项
