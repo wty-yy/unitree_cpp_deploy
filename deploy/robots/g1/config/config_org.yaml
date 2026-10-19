@@ -1,0 +1,209 @@
+FSM:
+  _: # enabled fsms
+    Passive:
+      id: 1
+    FixStand:
+      id: 2
+    Velocity_Y:
+      id: 3
+      type: RLBase
+    BFM_goal:
+      id: 4
+      type: BFM
+    OmniXtreme:
+      id: 5
+      type: OmniXtreme
+    BeyondMimic:
+      id: 6
+      type: Mimic
+
+  overlay:
+    OverlayBeyondMimic:
+      target_state: BeyondMimic
+      open: RT + A.on_pressed
+      select_next: down.on_pressed
+      select_prev: up.on_pressed
+      confirm: A.on_pressed
+      cancel: B.on_pressed
+      motion_files:
+        - ../../../logs/g1/beyondmimic/dailylife_walk/motions
+
+  Passive:
+    transitions: 
+      FixStand: LT + up.on_pressed
+    mode: [
+      1,1,1,1,1,1,
+      1,1,1,1,1,1,
+      1,1,1,
+      1,1,1,1,1,1,1,
+      1,1,1,1,1,1,1,
+    ]
+    kd: [
+      3,3,3,3,3,3,
+      3,3,3,3,3,3,
+      3,3,3,
+      3,3,3,3,3,3,3,  
+      3,3,3,3,3,3,3,  
+    ]
+  FixStand:
+    transitions: 
+      Passive: LT + B.on_pressed
+      Velocity_Y: RB + Y.on_pressed
+      BFM_goal: RT + Y.on_pressed
+      OmniXtreme: RT + X.on_pressed
+    kp: [
+      100., 100., 100., 150., 40., 40.,
+      100., 100., 100., 150., 40., 40.,
+      200,200,200,
+      40,40,40,40,40,40,40,
+      40,40,40,40,40,40,40,
+    ]
+    kd: [
+      2,2,2,4,2,2,
+      2,2,2,4,2,2,
+      5,5,5,
+      10,10,10,10,10,10,10,
+      10,10,10,10,10,10,10,
+    ]
+    ts: [0, 3]
+    qs: [
+      [],
+      [ -0.1, 0,0,0.3,-0.2,0,
+        -0.1, 0,0,0.3,-0.2,0,
+        0,0,0,
+        0, 0.25,0,0.97,0.15, 0,0,
+        0, -0.25,0,0.97,-0.15, 0,0
+      ]
+    ]
+  Velocity_Y:
+    transitions: 
+      Passive: LT + B.on_pressed
+      BFM_goal: RT + Y.on_pressed
+      OmniXtreme: RT + X.on_pressed
+    policy_dir: ../../../logs/g1/velocity/g1_moe_cts_v0.0.5.1
+    # policy_dir: ../../../logs/g1/velocity/g1_zhoumoshi_v0
+    joint_filters:
+      q_target:
+        enabled: true
+        type: lpf
+        joint_indices: [12, 13, 14]
+        lpf:
+          alpha: 0.7
+
+  BFM_goal:
+    transitions: 
+      Passive: LT + B.on_pressed
+      Velocity_Y: RB + Y.on_pressed
+      OmniXtreme: RT + X.on_pressed
+    policy_dir: ../../../logs/g1/bfm/official
+    verbose_runtime_log: false
+    deploy_yaml: param/deploy.yaml
+    onnx_model: exported/FBcprAuxModel.onnx
+    onnx_tensorrt: false
+    onnx_cuda: true
+    onnx_cuda_device: 0
+    joint_filters:
+      q_target:
+        enabled: true
+        type: kalman
+        joint_indices: [12, 13, 14]
+        kalman:
+          process_noise: 1.0e-4
+          measurement_noise: 2.0e-3
+          initial_error_cov: 1.0e-2
+    task_type: goal
+    latent_file: goal_inference/goal_reaching.npz
+    gamepad_map:
+      next_latent: Y.on_pressed
+      reset_state: X.on_pressed
+    goal:
+      selected_goals: [
+        fallAndGetUp1_subject4_2193,
+        # dance1_subject3_505,
+        fight1_subject3_5559, 
+        # fallAndGetUp1_subject4_2193,
+      ]
+
+  OmniXtreme:
+    transitions:
+      Passive: LT + B.on_pressed
+      Velocity_Y: RB + Y.on_pressed
+      BFM_goal: RT + Y.on_pressed
+    policy_dir: ../../../logs/g1/omnixtreme/official
+    deploy_yaml: params/deploy.yaml
+    base_model: exported/base_policy_trt.onnx
+    residual_model: exported/residual_policy.onnx
+    fk_model: exported/fk_trt.onnx
+    # motions_dir: exported/motions  # Optional, load from motion_files if specified
+    motion_files:
+      - exported/motions/4.npz  # 回旋踢
+      - exported/motions/5.npz  # 前滚
+      # - exported/motions/7.npz  # 张手
+      - exported/motions/9.npz  # 后空翻
+      - exported/motions/10.npz  # 侧回旋踢
+      - exported/motions/11.npz  # 前空翻
+      - exported/motions/13.npz  # 低姿态踢腿
+      # - exported/motions/motion.npz
+    onnx_tensorrt: false
+    onnx_cuda: true
+    onnx_cuda_device: 0
+    action_clip: 1.0
+    residual_scale: 1.0
+    joint_filters:
+      q_target:
+        - enabled: true
+          type: lpf
+          joint_indices: [
+            0, 1, 2, 3, 4, 5,
+            6, 7, 8, 9, 10, 11,
+            15, 16, 17, 18, 19, 20, 21,
+            22, 23, 24, 25, 26, 27, 28
+          ]
+          lpf:
+            alpha: 0.8
+        - enabled: true
+          type: lpf
+          joint_indices: [12, 13, 14]
+          lpf:
+            alpha: 0.7
+      tau_ff:
+        - enabled: true
+          type: lpf
+          joint_indices: [
+            0, 1, 2, 3, 4, 5,
+            6, 7, 8, 9, 10, 11,
+            15, 16, 17, 18, 19, 20, 21,
+            22, 23, 24, 25, 26, 27, 28
+          ]
+          lpf:
+            alpha: 0.5
+        - enabled: true
+          type: lpf
+          joint_indices: [12, 13, 14]
+          lpf:
+            alpha: 0.5
+    loop_trajectory: true
+    root_body_index: 0
+    # body_quat_w 中用于构造 anchor_ori_6d 的 body 索引；当前与 deploy_mujoco.py 的 bm_anchor_id=9 对齐
+    anchor_body_index: 9
+    gamepad_map:
+      next_trajectory: Y.on_pressed
+      previous_trajectory: A.on_pressed
+      reset_trajectory: X.on_pressed
+      toggle_execute: B.on_pressed
+
+  BeyondMimic:
+    transitions: 
+      Passive: LT + B.on_pressed
+      Velocity_Y: RB + Y.on_pressed
+      BFM_goal: RT + Y.on_pressed
+      OmniXtreme: RT + X.on_pressed
+    fps: 30  # Motion file fps
+    motion_files:
+      - ../../../logs/g1/beyondmimic/dailylife_walk/motions
+    policy_dir: ../../../logs/g1/beyondmimic/dailylife_walk
+    deploy_yaml: param/deploy.yaml
+    onnx_model: exported/policy.onnx
+    time_start: null   # Start time [sec], null from the beginning
+    time_end: null    # End time [sec], null until the end
+    finished_transition: BFM_goal
