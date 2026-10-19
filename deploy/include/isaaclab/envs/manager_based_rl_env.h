@@ -10,6 +10,7 @@
 #include "isaaclab/assets/articulation/articulation.h"
 #include "isaaclab/algorithms/algorithms.h"
 #include "utils/VelocityCommandDamper.h"
+#include "utils/ExternalVelocity.h"
 #include <iostream>
 #include <map>
 #include <string>
@@ -81,6 +82,7 @@ public:
             step_dt,
             fixed_command_enabled && fixed_command_active,
             {fixed_lin_vel_x, fixed_lin_vel_y, fixed_ang_vel_z});
+        update_external_velocity();
         if (action_manager) action_manager->reset();
         if (observation_manager) observation_manager->reset();
     }
@@ -93,6 +95,7 @@ public:
             step_dt,
             fixed_command_enabled && fixed_command_active,
             {fixed_lin_vel_x, fixed_lin_vel_y, fixed_ang_vel_z});
+        update_external_velocity();
         if (!observation_manager || !action_manager || !alg)
         {
             throw std::runtime_error("ManagerBasedRLEnv::step requires observation_manager, action_manager and alg");
@@ -121,6 +124,35 @@ public:
         return velocity_command_damper_.boost_active();
     }
 
+    // Replace the joystick-derived command with the acknowledged external lease.
+    void update_external_velocity()
+    {
+        auto& bridge = robot_automation::ExternalVelocity::instance();
+        if (!external_velocity_enabled)
+        {
+            velocity_command_damper_.clear_external_command();
+            return;
+        }
+        if (!velocity_command_damper_.has_command_ranges())
+        {
+            bridge.invalidate_ranges();
+            velocity_command_damper_.clear_external_command();
+            return;
+        }
+        const auto& active = velocity_command_damper_.active_ranges();
+        robot_automation::ExternalVelocity::Ranges ranges;
+        for (std::size_t i = 0; i < ranges.size(); ++i)
+            ranges[i] = {active[i][0], active[i][1]};
+        if (!bridge.set_ranges(ranges, velocity_command_damper_.boost_active()))
+        {
+            velocity_command_damper_.clear_external_command();
+            return;
+        }
+        std::array<float, 3> command{};
+        if (bridge.sample(command)) velocity_command_damper_.set_external_command(command);
+        else velocity_command_damper_.clear_external_command();
+    }
+
     float step_dt;
     
     YAML::Node policy_cfg;
@@ -133,6 +165,9 @@ public:
     float global_phase = 0.0f;
     
     std::map<std::string, std::vector<float>> last_inference_results;
+
+    // Set only by a Go2 Velocity_* state; the lease then replaces joystick commands.
+    bool external_velocity_enabled = false;
 
     // Fixed command control
     bool fixed_command_enabled = false;

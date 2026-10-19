@@ -52,6 +52,7 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
         std::make_shared<unitree::BaseArticulation<LowState_t::SharedPtr>>(FSMState::lowstate),
         cfg
     );
+    env->external_velocity_enabled = state_string.rfind("Velocity_", 0) == 0;
     env->alg = std::make_unique<isaaclab::OrtRunner>(policy_dir / "exported" / "policy.onnx");
 
     this->registered_checks.emplace_back(
@@ -135,7 +136,7 @@ void State_RLBase::run()
 
     // Check for L2 + Y to toggle fixed command execution
     if (env->fixed_command_enabled) {
-        auto & joy = lowstate->joystick;
+        auto & joy = FSMState::effective_joystick();
         if (joy.LT.pressed && joy.Y.on_pressed) {
             env->fixed_command_active = !env->fixed_command_active;
             if (env->fixed_command_active) {

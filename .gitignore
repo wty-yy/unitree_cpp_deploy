@@ -8,3 +8,4 @@ images/
 __pycache__/
 .vscode/
 mytest*
+runtime/

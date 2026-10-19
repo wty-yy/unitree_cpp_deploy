@@ -5,8 +5,13 @@
 
 #include <unitree/common/thread/recurrent_thread.hpp>
 #include "BaseState.h"
+#include "FSM/FSMState.h"
+#include "utils/ExternalVelocity.h"
 #include <spdlog/spdlog.h>
 #include <yaml-cpp/yaml.h>
+#include <array>
+#include <set>
+#include <vector>
 
 class CtrlFSM
 {
@@ -82,17 +87,39 @@ private:
     void run_()
     {
         currentState->pre_run();
+        apply_external_joystick_();
+        FSMState::update_effective_joystick();
+        update_external_velocity_();
         currentState->run();
         currentState->post_run();
-        
+
         // Check if need to change state
         int nextStateMode = 0;
-        for(int i(0); i<currentState->registered_checks.size(); i++)
+        std::string requested_state;
+        const bool external_request =
+            robot_automation::ExternalVelocity::instance().take_requested_state(requested_state);
+        if (external_request)
         {
-            if(currentState->registered_checks[i].first())
+            const auto requested_id = FSMStringMap.right.find(requested_state);
+            if (requested_id == FSMStringMap.right.end())
             {
-                nextStateMode = currentState->registered_checks[i].second;
-                break;
+                robot_automation::ExternalVelocity::instance().report_state_result(
+                    false, "Unknown FSM state: " + requested_state);
+            }
+            else
+            {
+                nextStateMode = requested_id->second;
+            }
+        }
+        else
+        {
+            for(int i(0); i<currentState->registered_checks.size(); i++)
+            {
+                if(currentState->registered_checks[i].first())
+                {
+                    nextStateMode = currentState->registered_checks[i].second;
+                    break;
+                }
             }
         }
 
@@ -103,13 +130,47 @@ private:
                 if(state->isState(nextStateMode))
                 {
                     spdlog::info("FSM: Change state from {} to {}", currentState->getStateString(), state->getStateString());
+                    robot_automation::ExternalVelocity::instance().update("Transition", false, false);
                     currentState->exit();
                     currentState = state;
                     currentState->enter();
+                    update_external_velocity_();
+                    robot_automation::ExternalVelocity::instance().report_state_result(
+                        true, "Transitioned to " + state->getStateString());
                     break;
                 }
             }
         }
+        else if (external_request && nextStateMode != 0)
+        {
+            robot_automation::ExternalVelocity::instance().report_state_result(
+                true, "Already in " + requested_state);
+        }
+    }
+
+    void apply_external_joystick_()
+    {
+        std::vector<std::string> buttons;
+        bool has_axes = false;
+        std::array<float, 4> axes{0.0f, 0.0f, 0.0f, 0.0f};
+        if (robot_automation::ExternalVelocity::instance().virtual_joystick(buttons, has_axes, axes))
+        {
+            FSMState::set_virtual_input(std::set<std::string>(buttons.begin(), buttons.end()),
+                                        has_axes, axes[0], axes[1], axes[2], axes[3]);
+        }
+        else
+        {
+            FSMState::clear_virtual_input();
+        }
+    }
+
+    void update_external_velocity_()
+    {
+        auto& joy = FSMState::lowstate->joystick;
+        const bool manual = joy.LT.pressed || std::abs(joy.lx()) > 0.12f ||
+            std::abs(joy.ly()) > 0.12f || std::abs(joy.rx()) > 0.12f;
+        robot_automation::ExternalVelocity::instance().update(
+            currentState->getStateString(), manual, !FSMState::lowstate->isTimeout());
     }
 
     std::shared_ptr<BaseState> currentState;

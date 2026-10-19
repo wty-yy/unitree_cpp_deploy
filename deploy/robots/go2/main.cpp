@@ -2,6 +2,7 @@
 #include "FSM/State_Passive.h"
 #include "FSM/State_Fix.h"
 #include "FSM/State_RLBase.h"
+#include "utils/ExternalVelocity.h"
 
 std::unique_ptr<LowCmd_t> FSMState::lowcmd = nullptr;
 std::shared_ptr<LowState_t> FSMState::lowstate = nullptr;
@@ -34,6 +35,9 @@ int main(int argc, char** argv)
 
     // Unitree DDS Config
     unitree::robot::ChannelFactory::Instance()->Init(0, vm["network"].as<std::string>());
+
+    robot_automation::ExternalVelocity::instance().start();
+    spdlog::info("External Velocity_* bridge enabled; manual controller has priority");
 
     init_fsm_state();
 

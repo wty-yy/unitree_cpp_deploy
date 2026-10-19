@@ -4,6 +4,7 @@
 #pragma once
 
 #include "isaaclab/assets/articulation/articulation.h"
+#include "FSM/FSMState.h"
 
 namespace unitree
 {
@@ -15,7 +16,7 @@ public:
     BaseArticulation(LowStatePtr lowstate_)
     : lowstate(lowstate_)
     {
-        data.joystick = &lowstate->joystick;
+        data.joystick = &FSMState::effective_joystick();
     }
 
     void update() override

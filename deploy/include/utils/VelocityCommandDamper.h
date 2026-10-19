@@ -33,6 +33,8 @@ namespace utils
 class VelocityCommandDamper
 {
 public:
+    using Range = std::array<float, 2>;
+
     void configure(
         const YAML::Node& policy_cfg,
         const YAML::Node& fsm_cfg,
@@ -58,15 +60,19 @@ public:
             boost_active_ = false;
             std::copy(fixed_command.begin(), fixed_command.end(), command_.begin());
         } else {
-            if (joystick_ == nullptr) {
-                throw std::runtime_error("VelocityCommandDamper joystick is not configured");
-            }
-
             boost_active_ = boost_enabled_ && boost_button_ != nullptr && boost_button_->pressed;
-            const auto& ranges = boost_active_ ? boost_command_ranges_ : command_ranges_;
-            command_[0] = scale_command(joystick_->ly(), ranges[0]);
-            command_[1] = scale_command(-joystick_->lx(), ranges[1]);
-            command_[2] = scale_command(-joystick_->rx(), ranges[2]);
+            if (external_active_) {
+                std::copy(external_command_.begin(), external_command_.end(), command_.begin());
+            } else {
+                if (joystick_ == nullptr) {
+                    throw std::runtime_error("VelocityCommandDamper joystick is not configured");
+                }
+
+                const auto& ranges = boost_active_ ? boost_command_ranges_ : command_ranges_;
+                command_[0] = scale_command(joystick_->ly(), ranges[0]);
+                command_[1] = scale_command(-joystick_->lx(), ranges[1]);
+                command_[2] = scale_command(-joystick_->rx(), ranges[2]);
+            }
         }
 
         command_[0] = update_vx(command_[0], dt);
@@ -84,14 +90,34 @@ public:
         return command_;
     }
 
+    bool has_command_ranges() const
+    {
+        return has_command_ranges_;
+    }
+
+    const std::array<Range, 3>& active_ranges() const
+    {
+        return boost_active_ ? boost_command_ranges_ : command_ranges_;
+    }
+
+    // The external lease supplies physical velocities instead of scaled joystick axes.
+    void set_external_command(const std::array<float, 3>& command)
+    {
+        external_command_ = command;
+        external_active_ = true;
+    }
+
+    void clear_external_command()
+    {
+        external_active_ = false;
+    }
+
     bool boost_active() const
     {
         return boost_active_;
     }
 
 private:
-    using Range = std::array<float, 2>;
-
     void configure_command_ranges(const YAML::Node& policy_cfg)
     {
         has_command_ranges_ = false;
@@ -316,6 +342,8 @@ private:
     std::array<Range, 3> command_ranges_{};
     std::array<Range, 3> boost_command_ranges_{};
     std::vector<float> command_{0.0f, 0.0f, 0.0f};
+    std::array<float, 3> external_command_{0.0f, 0.0f, 0.0f};
+    bool external_active_ = false;
     std::vector<float> speed_points_;
     std::vector<float> time_constants_;
 };
