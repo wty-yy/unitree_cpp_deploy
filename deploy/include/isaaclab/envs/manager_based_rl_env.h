@@ -11,9 +11,11 @@
 #include "isaaclab/algorithms/algorithms.h"
 #include "utils/VelocityCommandDamper.h"
 #include "utils/ExternalVelocity.h"
+#include "utils/PolicyHeightMap.h"
 #include <iostream>
 #include <map>
 #include <string>
+#include <spdlog/spdlog.h>
 
 namespace isaaclab
 {
@@ -60,6 +62,15 @@ public:
 
         robot->update();
         velocity_command_damper_.configure(this->policy_cfg, fsm_cfg, robot->data.joystick);
+        if (policy_cfg["height_map"]) {
+            const auto map = policy_cfg["height_map"];
+            const auto shape = map["image_shape"].as<std::vector<int>>(std::vector<int>{2, 17, 11});
+            if (shape != std::vector<int>{2, 17, 11} && shape != std::vector<int>{2, 9, 11})
+                throw std::runtime_error("Height-map image_shape must be [2,17,11] or [2,9,11].");
+            height_map = std::make_unique<utils::PolicyHeightMap>(shape[1] == 9);
+            height_map->start(map["topic"].as<std::string>("rt/go2/policy_height_map"), map["timeout_s"].as<double>(0.5));
+            height_map_ready = height_map->sample(height_map_image);
+        }
 
         // load managers
         if (policy_cfg["actions"])
@@ -83,8 +94,10 @@ public:
             fixed_command_enabled && fixed_command_active,
             {fixed_lin_vel_x, fixed_lin_vel_y, fixed_ang_vel_z});
         update_external_velocity();
+        if (height_map) height_map_ready = height_map->sample(height_map_image);
         if (action_manager) action_manager->reset();
         if (observation_manager) observation_manager->reset();
+        if (alg) alg->reset();
     }
 
     void step()
@@ -96,6 +109,15 @@ public:
             fixed_command_enabled && fixed_command_active,
             {fixed_lin_vel_x, fixed_lin_vel_y, fixed_ang_vel_z});
         update_external_velocity();
+        if (height_map) {
+            const bool ready = height_map->sample(height_map_image);
+            if (ready != height_map_ready) {
+                if (alg) alg->reset();
+                if (ready) spdlog::info("Height map ready; recurrent policy state reset");
+                else spdlog::warn("Height map unavailable or stale; stopping velocity commands and resetting policy state");
+            }
+            height_map_ready = ready;
+        }
         if (!observation_manager || !action_manager || !alg)
         {
             throw std::runtime_error("ManagerBasedRLEnv::step requires observation_manager, action_manager and alg");
@@ -116,6 +138,8 @@ public:
 
     const std::vector<float>& velocity_command() const
     {
+        static const std::vector<float> stopped(3, 0.0f);
+        if (height_map && !height_map_ready) return stopped;
         return velocity_command_damper_.command();
     }
 
@@ -161,6 +185,9 @@ public:
     std::unique_ptr<ActionManager> action_manager;
     std::shared_ptr<Articulation> robot;
     std::unique_ptr<Algorithms> alg;
+    std::unique_ptr<utils::PolicyHeightMap> height_map;
+    std::vector<float> height_map_image;
+    bool height_map_ready = false;
     long episode_length = 0;
     float global_phase = 0.0f;
     

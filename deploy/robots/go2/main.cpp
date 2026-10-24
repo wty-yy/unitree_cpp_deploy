@@ -34,7 +34,7 @@ int main(int argc, char** argv)
     std::cout << "     Go2 Controller \n";
 
     // Unitree DDS Config
-    unitree::robot::ChannelFactory::Instance()->Init(0, vm["network"].as<std::string>());
+    unitree::robot::ChannelFactory::Instance()->Init(vm["domain_id"].as<int>(), vm["network"].as<std::string>());
 
     robot_automation::ExternalVelocity::instance().start();
     spdlog::info("External Velocity_* bridge enabled; manual controller has priority");

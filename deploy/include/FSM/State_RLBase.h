@@ -8,6 +8,7 @@
 #include "isaaclab/envs/mdp/terminations.h"
 #include "DataLogger.h"
 #include <chrono>
+#include <atomic>
 
 class State_RLBase : public FSMState
 {
@@ -72,7 +73,7 @@ private:
     std::chrono::steady_clock::time_point start_time;
 
     std::thread policy_thread;
-    bool policy_thread_running = false;
+    std::atomic<bool> policy_thread_running{false};
 };
 
 REGISTER_FSM(State_RLBase)

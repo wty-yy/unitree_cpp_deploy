@@ -1,9 +1,6 @@
 build/
 onnxruntime-linux-*/
-log/
-logs/**/logs/
-logs/**/*.csv
-logs/**/*.pt
+logs/
 images/
 __pycache__/
 .vscode/

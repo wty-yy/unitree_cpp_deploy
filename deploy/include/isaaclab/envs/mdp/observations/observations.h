@@ -10,6 +10,11 @@ namespace isaaclab
 namespace mdp
 {
 
+REGISTER_OBSERVATION(policy_height_map)
+{
+    return env->height_map_image;
+}
+
 REGISTER_OBSERVATION(base_ang_vel)
 {
     auto & asset = env->robot;
