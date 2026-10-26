@@ -89,7 +89,7 @@ FSM:
       Velocity_A: RB + A.on_pressed
       BFM_goal: RT + Y.on_pressed
       # OmniXtreme: RT + X.on_pressed
-    policy_dir: ../../../logs/g1/g1_rl_lab/mixed/g1_mixed_moe_cts_mixed0.1.5_amp0.05_stadium_control_38k
+    policy_dir: ../../../logs/g1/g1_rl_lab/mixed/v0.1.5.post2_15.5k
 
   Velocity_X:
     transitions:
@@ -98,7 +98,7 @@ FSM:
       Velocity_A: RB + A.on_pressed
       BFM_goal: RT + Y.on_pressed
       # OmniXtreme: RT + X.on_pressed
-    policy_dir: null
+    policy_dir: ../../../logs/g1/g1_rl_lab/mixed/v0.1.5.post1_29k
     boost_button: RT  # Hold to use commands.base_velocity.boost.ranges.
     logging: false
     logging_dt: 0.02
@@ -118,7 +118,7 @@ FSM:
       Velocity_X: RB + X.on_pressed
       BFM_goal: RT + Y.on_pressed
       # OmniXtreme: RT + X.on_pressed
-    policy_dir: ../../../logs/g1/g1_rl_lab/crawl/g1_crawl_v3.4_8k
+    policy_dir: ../../../logs/g1/g1_rl_lab/mixed/v0.1.5.post1_40k
     enable_bad_orientation_check: false
 
   BFM_goal:

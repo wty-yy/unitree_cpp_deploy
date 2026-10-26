@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 20261026 v0.6.9
+
+1. Add command-driven `step_frequency` and `step_phase` observations with smoothed frequency, standstill freezing, random reset phase, and one update per control step
+2. Update `config.yaml` policies for `Velocity_Y`, `Velocity_X`, and `Velocity_A` to `v0.1.5.post2_15.5k`, `v0.1.5.post1_29k`, and `v0.1.5.post1_40k`
+3. Add the three velocity ONNX models and matching deployment configurations; remove the replaced `stadium_control_38k` model
+
 ## 20261019 v0.6.8
 
 1. 删除外部速度桥中的电机遥测采集与上报，电机故障码和温度改由上层程序直接订阅 DDS `LowState` 获取

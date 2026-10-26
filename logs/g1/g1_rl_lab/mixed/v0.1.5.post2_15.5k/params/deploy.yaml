@@ -27,17 +27,23 @@ default_joint_pos: [
   0.3, -0.25, 0.0, 0.97, -0.15, 0.0, 0.0  # right arm
 ]
 commands:
+  step_frequency:
+    frequency_range: [0.5, 1.8]
+    linear_scale: 0.38
+    backward_scale: 0.12
+    turn_radius: 0.15
+    smoothing_time: 0.3
   base_velocity:
     ranges:
       lin_vel_x: [-1.0, 1.0]
       lin_vel_y: [-0.8, 0.8]
-      ang_vel_z: [-3.0, 3.0]
+      ang_vel_z: [-1.5, 1.5]
       heading: null
     boost:
       ranges:
         lin_vel_x: [-2.0, 2.0]
-        lin_vel_y: [-0.5, 0.5]
-        ang_vel_z: [-2.0, 2.0]
+        lin_vel_y: [-0.6, 0.6]
+        ang_vel_z: [-1.0, 1.0]
 actions:
   JointPositionAction:
     # Target-angle bounds equivalent to clipping raw actions to [-100, 100].
@@ -90,7 +96,7 @@ actions:
     joint_ids: null
 observations:
   scale_first: true
-  # ONNX consumes 10 frames per observation term (96 * 10 = 960).
+  # ONNX consumes 10 frames per observation term (98 * 10 = 980).
   use_gym_history: false
   base_ang_vel:
     params: {}
@@ -124,4 +130,10 @@ observations:
     clip: [-100.0, 100.0]
     scale: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
        1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    history_length: 10
+  step_phase:
+    params:
+      command_name: step_frequency
+    clip: null
+    scale: [1.0, 1.0]
     history_length: 10

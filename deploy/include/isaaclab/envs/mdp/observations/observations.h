@@ -162,6 +162,34 @@ REGISTER_OBSERVATION(velocity_commands)
     return obs;
 }
 
+REGISTER_OBSERVATION(step_phase)
+{
+    // Observation initialization and repeated group reads must not advance the oscillator.
+    if (env->step_phase_update_step != env->episode_length)
+    {
+        const auto cfg = env->cfg["commands"][params["command_name"].as<std::string>()];
+        const auto velocity = velocity_commands(env, YAML::Node());
+        const float turn_speed = cfg["turn_radius"].as<float>() * velocity[2];
+        const float effective_speed = std::sqrt(
+            velocity[0] * velocity[0] + velocity[1] * velocity[1] + turn_speed * turn_speed);
+        const auto frequency_range = cfg["frequency_range"].as<std::vector<float>>();
+        const float target = std::clamp(
+            frequency_range[0] + cfg["linear_scale"].as<float>() * effective_speed
+                + cfg["backward_scale"].as<float>() * std::max(-velocity[0], 0.0f),
+            frequency_range[0], frequency_range[1]);
+        const float alpha = -std::expm1(-env->step_dt / cfg["smoothing_time"].as<float>());
+        env->step_frequency += alpha * (target - env->step_frequency);
+        if (std::max({std::abs(velocity[0]), std::abs(velocity[1]), std::abs(velocity[2])}) < 0.05f)
+        {
+            env->step_frequency = 0.0f;
+        }
+        env->step_phase = std::fmod(
+            env->step_phase + 2.0f * M_PI * env->step_frequency * env->step_dt, 2.0f * M_PI);
+        env->step_phase_update_step = env->episode_length;
+    }
+    return {std::sin(env->step_phase), std::cos(env->step_phase)};
+}
+
 REGISTER_OBSERVATION(gait_phase)
 {
     float period = params["period"].as<float>();

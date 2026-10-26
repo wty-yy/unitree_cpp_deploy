@@ -14,6 +14,7 @@
 #include <iostream>
 #include <map>
 #include <mutex>
+#include <random>
 #include <string>
 
 namespace isaaclab
@@ -87,6 +88,10 @@ public:
     {
         global_phase = 0;
         episode_length = 0;
+        static thread_local std::mt19937 phase_generator(std::random_device{}());
+        step_phase = std::uniform_real_distribution<float>(0.0f, 2.0f * M_PI)(phase_generator);
+        step_frequency = 0.0f;
+        step_phase_update_step = 0;
         robot->update();
         if(robot->data.motion_loader) {
             robot->data.motion_loader->reset(robot->data);
@@ -158,6 +163,9 @@ public:
     std::unique_ptr<Algorithms> alg;
     long episode_length = 0;
     float global_phase = 0.0f;
+    float step_phase = 0.0f;
+    float step_frequency = 0.0f;
+    long step_phase_update_step = 0;
     
     std::map<std::string, std::vector<float>> last_inference_results;
 
