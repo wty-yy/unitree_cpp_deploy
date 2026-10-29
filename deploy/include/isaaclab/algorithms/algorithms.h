@@ -15,6 +15,8 @@ namespace isaaclab
 class Algorithms
 {
 public:
+    virtual ~Algorithms() = default;
+    virtual void reset() {}
     virtual std::vector<float> act(std::unordered_map<std::string, std::vector<float>> obs) = 0;
     virtual std::map<std::string, std::vector<float>> forward(std::unordered_map<std::string, std::vector<float>> obs) { return {}; }
     
@@ -116,6 +118,9 @@ public:
         for(size_t i = 0; i < input_names.size(); ++i)
         {
             auto& input_data = obs.at(input_names_strings[i]);
+            if (input_data.size() != static_cast<std::size_t>(input_sizes[i])) {
+                throw std::runtime_error("Input size mismatch for " + input_names_strings[i]);
+            }
             auto input_tensor = Ort::Value::CreateTensor<float>(memory_info, input_data.data(), input_sizes[i], input_shapes[i].data(), input_shapes[i].size());
             input_tensors.push_back(std::move(input_tensor));
         }

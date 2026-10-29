@@ -101,6 +101,7 @@ REGISTER_OBSERVATION(last_action)
 
 REGISTER_OBSERVATION(velocity_commands)
 {
+    if (env->height_map && !env->height_map_ready) return std::vector<float>(3, 0.0f);
     YAML::Node cfg;
     if (env->external_velocity_enabled)
     {

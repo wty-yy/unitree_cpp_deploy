@@ -13,3 +13,5 @@ mytest*
 .pytest_cache/
 *.py[cod]
 *.log
+/debug_ai/
+/debug_data/

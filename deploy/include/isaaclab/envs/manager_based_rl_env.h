@@ -11,6 +11,7 @@
 #include "isaaclab/assets/articulation/articulation.h"
 #include "isaaclab/algorithms/algorithms.h"
 #include "utils/VelocityCommandBoost.h"
+#include "utils/PolicyHeightMap.h"
 #include <iostream>
 #include <map>
 #include <mutex>
@@ -73,6 +74,13 @@ public:
 
         velocity_command_boost_.configure(this->cfg, fsm_cfg, robot->data.joystick);
 
+        if (cfg["height_map"]) {
+            const auto map = cfg["height_map"];
+            height_map = std::make_unique<utils::PolicyHeightMap>();
+            height_map->start(map["topic"].as<std::string>(), map["timeout_s"].as<double>(0.5));
+            height_map_ready = height_map->sample(height_map_image);
+        }
+
         // load managers
         if (cfg["actions"])
         {
@@ -96,6 +104,8 @@ public:
         if(robot->data.motion_loader) {
             robot->data.motion_loader->reset(robot->data);
         }
+        if (height_map) height_map_ready = height_map->sample(height_map_image);
+        if (alg) alg->reset();
         if (action_manager) action_manager->reset();
         if (observation_manager) observation_manager->reset();
     }
@@ -110,6 +120,11 @@ public:
         if (!observation_manager || !action_manager || !alg)
         {
             throw std::runtime_error("ManagerBasedRLEnv::step requires observation_manager, action_manager and alg");
+        }
+        if (height_map) {
+            const bool ready = height_map->sample(height_map_image);
+            if (ready != height_map_ready) alg->reset();
+            height_map_ready = ready;
         }
         auto obs = observation_manager->compute();
         auto inference_results = alg->forward(obs);
@@ -152,6 +167,10 @@ public:
             ? velocity_command_boost_.ranges()
             : cfg["commands"]["base_velocity"]["ranges"];
     }
+
+    std::unique_ptr<utils::PolicyHeightMap> height_map;
+    std::vector<float> height_map_image;
+    bool height_map_ready = false;
 
     float step_dt;
     

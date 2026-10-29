@@ -1,3 +1,4 @@
+#include "isaaclab/algorithms/recurrent_height_map_runner.h"
 #include "FSM/State_RLBase.h"
 #include "unitree_articulation.h"
 #include "isaaclab/envs/mdp/observations/observations.h"
@@ -5,6 +6,7 @@
 #include "FSM/state_preflight_utils.h"
 #include <ctime>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <unordered_map>
 
@@ -96,7 +98,15 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
         cfg
     );
     env->external_velocity_enabled = state_string == "Velocity_X" || state_string == "Velocity_A";
-    env->alg = std::make_unique<isaaclab::OrtRunner>(policy_dir / "exported" / "policy.onnx");
+    const auto model_path = policy_dir / "exported" / "policy.onnx";
+    if (env->cfg["policy_type"].as<std::string>("feedforward") == "recurrent_height_map") {
+        if (!env->height_map) throw std::runtime_error("Recurrent height-map policy requires height_map config");
+        env->alg = std::make_unique<isaaclab::RecurrentHeightMapRunner>(
+            model_path.string(), [this] { return env->height_map_image; });
+        spdlog::info("State_{}: paired height-map DDS; unavailable maps stop velocity commands", state_string);
+    } else {
+        env->alg = std::make_unique<isaaclab::OrtRunner>(model_path);
+    }
 
     const std::size_t dof = env->robot->data.joint_ids_map.size();
     const std::string filter_name = "State_RLBase(" + getStateString() + ") joint_filters.q_target";
@@ -146,6 +156,8 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
     log_robot_state_ = logging_option_enabled(cfg, "robot_state");
     log_commands_ = logging_option_enabled(cfg, "commands");
     log_inference_outputs_ = logging_option_enabled(cfg, "inference_outputs");
+    log_torso_imu_ = logging_option_enabled(cfg, "torso_imu");
+    log_lowcmd_ = logging_option_enabled(cfg, "lowcmd");
 
     if (enable_logging)
     {
@@ -163,8 +175,9 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
         auto in_time_t = std::chrono::system_clock::to_time_t(now);
         std::stringstream ss;
         ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d_%H-%M-%S");
-        const std::string filename = "run_data_" + ss.str() + ".csv";
-        const auto logs_dir = policy_dir / "logs";
+        const std::string run_name = "run_data_" + ss.str();
+        const std::string filename = run_name + ".csv";
+        const auto logs_dir = policy_dir / "logs" / run_name;
         if (!std::filesystem::exists(logs_dir))
         {
             std::filesystem::create_directories(logs_dir);
@@ -172,6 +185,27 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
 
         const auto file_path = (logs_dir / filename).string();
         logger = std::make_unique<DataLogger>(file_path);
+        if (log_torso_imu_ || log_lowcmd_)
+        {
+            logging_telemetry_ = std::make_unique<G1LoggingTelemetry>(log_torso_imu_, log_lowcmd_);
+        }
+        logging_metadata_ = {
+            {"format_version", 2},
+            {"state", state_string},
+            {"policy_dir", std::filesystem::weakly_canonical(policy_dir).string()},
+            {"joint_ids_map", env->cfg["joint_ids_map"].as<std::vector<int>>()},
+            {"fsm_config_yaml", YAML::Dump(cfg)},
+            {"deploy_config_yaml", YAML::Dump(env->cfg)},
+            {"telemetry_timeout_ms", 100},
+            {"torso_imu_topic", "rt/secondary_imu"},
+            {"lowcmd_topic", "rt/lowcmd"},
+            {"quaternion_order", "wxyz"},
+            {"angle_units", "rad"},
+            {"lowcmd_config_id", "References kind=lowcmd in events_file; kp/kd/dq/tau/mode are recorded initially and on change"},
+            {"temperature_id", "References kind=temperature in events_file; two sensor values per motor, in joint_ids_map order"},
+            {"lowcmd_q", "Latest received published LowCmd, in joint_ids_map order; not the pending policy target"},
+            {"telemetry_age_ms", "Elapsed steady-clock time since message reception; not a hardware timestamp"}
+        };
         spdlog::info("State_{} logging enabled. Saving to {} at {:.4f}s", state_string, file_path, logging_dt.count());
 
         start_time = std::chrono::steady_clock::now();
@@ -286,6 +320,21 @@ void State_RLBase::run()
         return;
     }
 
+    if (!logging_metadata_written_)
+    {
+        logging_metadata_["observation_terms"] = nlohmann::json::array();
+        for (const auto& term : snapshot.observation_terms)
+        {
+            logging_metadata_["observation_terms"].push_back({
+                {"group", term.group_name}, {"term", term.term_name}, {"flattened_size", term.values.size()}
+            });
+        }
+        logging_metadata_["observations_use_gym_history"] = env->cfg["observations"]["use_gym_history"].as<bool>(false);
+        logging_metadata_["observation_history_order"] = "oldest first";
+        logger->write_metadata(logging_metadata_);
+        logging_metadata_written_ = true;
+    }
+
     last_log_time = now;
 
     const std::chrono::duration<double> time_since_start = now - start_time;
@@ -337,11 +386,16 @@ void State_RLBase::run()
 
     if (log_robot_state_)
     {
+        // Keep all recorded motor/IMU fields from the same LowState message.
+        const auto state = [this] {
+            std::lock_guard<std::mutex> lock(lowstate->mutex_);
+            return lowstate->msg_;
+        }();
         const auto& joint_ids = env->robot->data.joint_ids_map;
         std::vector<float> q;
         std::vector<float> dq;
         std::vector<float> tau;
-        std::vector<float> temp;
+        std::vector<int> temp;
         q.reserve(joint_ids.size());
         dq.reserve(joint_ids.size());
         tau.reserve(joint_ids.size());
@@ -349,28 +403,30 @@ void State_RLBase::run()
         for (int i = 0; i < joint_ids.size(); ++i)
         {
             const int joint_id = static_cast<int>(joint_ids[i]);
-            const auto& motor = lowstate->msg_.motor_state()[joint_id];
+            const auto& motor = state.motor_state()[joint_id];
             q.push_back(motor.q());
             dq.push_back(motor.dq());
             tau.push_back(motor.tau_est());
 
             const auto& motor_temp = motor.temperature();
-            temp.push_back(static_cast<float>(motor_temp[0]));
-            temp.push_back(static_cast<float>(motor_temp[1]));
+            temp.push_back(static_cast<int>(motor_temp[0]));
+            temp.push_back(static_cast<int>(motor_temp[1]));
         }
         logger->add("q", q);
         logger->add("dq", dq);
         logger->add("tau", tau);
-        logger->add("temp", temp);
+        logger->add("temperature_id", std::to_string(logger->record_configuration(
+            "temperature", temp, time_since_start.count(), unix_time)));
+        logger->add("lowstate_tick", std::to_string(state.tick()));
 
         std::vector<float> imu_rpy(3);
         std::vector<float> imu_acc(3);
         std::vector<float> ang_vel(3);
         for (int i = 0; i < 3; ++i)
         {
-            imu_rpy[i] = lowstate->msg_.imu_state().rpy()[i];
-            imu_acc[i] = lowstate->msg_.imu_state().accelerometer()[i];
-            ang_vel[i] = lowstate->msg_.imu_state().gyroscope()[i];
+            imu_rpy[i] = state.imu_state().rpy()[i];
+            imu_acc[i] = state.imu_state().accelerometer()[i];
+            ang_vel[i] = state.imu_state().gyroscope()[i];
         }
         logger->add("imu_rpy", imu_rpy);
         logger->add("imu_acc", imu_acc);
@@ -379,9 +435,67 @@ void State_RLBase::run()
         std::vector<float> imu_quat(4);
         for (int i = 0; i < 4; ++i)
         {
-            imu_quat[i] = lowstate->msg_.imu_state().quaternion()[i];
+            imu_quat[i] = state.imu_state().quaternion()[i];
         }
         logger->add("imu_quat", imu_quat);
+    }
+
+    if (logging_telemetry_)
+    {
+        const auto telemetry = logging_telemetry_->snapshot();
+        const auto received_now = std::chrono::steady_clock::now();
+        const float missing = std::numeric_limits<float>::quiet_NaN();
+        if (log_torso_imu_)
+        {
+            const float age = telemetry.torso_sequence
+                ? std::chrono::duration<float, std::milli>(received_now - telemetry.torso_received).count() : missing;
+            logger->add("torso_imu_valid", telemetry.torso_sequence && age <= 100.0f ? "1" : "0");
+            logger->add("torso_imu_age_ms", age);
+            logger->add("torso_imu_seq", std::to_string(telemetry.torso_sequence));
+            std::vector<float> rpy(3, missing), acc(3, missing), gyro(3, missing), quat(4, missing);
+            if (telemetry.torso_sequence)
+            {
+                rpy.assign(telemetry.torso.rpy().begin(), telemetry.torso.rpy().end());
+                acc.assign(telemetry.torso.accelerometer().begin(), telemetry.torso.accelerometer().end());
+                gyro.assign(telemetry.torso.gyroscope().begin(), telemetry.torso.gyroscope().end());
+                quat.assign(telemetry.torso.quaternion().begin(), telemetry.torso.quaternion().end());
+            }
+            logger->add("torso_imu_rpy", rpy);
+            logger->add("torso_imu_quat", quat);
+            logger->add("torso_imu_acc", acc);
+            logger->add("torso_imu_gyro", gyro);
+        }
+        if (log_lowcmd_)
+        {
+            const float age = telemetry.lowcmd_sequence
+                ? std::chrono::duration<float, std::milli>(received_now - telemetry.lowcmd_received).count() : missing;
+            logger->add("lowcmd_valid", telemetry.lowcmd_sequence && age <= 100.0f ? "1" : "0");
+            logger->add("lowcmd_age_ms", age);
+            logger->add("lowcmd_seq", std::to_string(telemetry.lowcmd_sequence));
+            std::vector<float> q(env->robot->data.joint_ids_map.size(), missing);
+            std::string configuration_id = "-1";
+            if (telemetry.lowcmd_sequence)
+            {
+                std::vector<float> kp, kd, dq, tau;
+                std::vector<int> mode;
+                for (std::size_t i = 0; i < q.size(); ++i)
+                {
+                    const auto& motor = telemetry.lowcmd.motor_cmd()[static_cast<int>(env->robot->data.joint_ids_map[i])];
+                    q[i] = motor.q();
+                    kp.push_back(motor.kp());
+                    kd.push_back(motor.kd());
+                    dq.push_back(motor.dq());
+                    tau.push_back(motor.tau());
+                    mode.push_back(motor.mode());
+                }
+                configuration_id = std::to_string(logger->record_configuration("lowcmd", {
+                    {"kp", kp}, {"kd", kd}, {"dq", dq}, {"tau", tau}, {"motor_mode", mode},
+                    {"mode_pr", telemetry.lowcmd.mode_pr()}, {"mode_machine", telemetry.lowcmd.mode_machine()}
+                }, time_since_start.count(), unix_time));
+            }
+            logger->add("lowcmd_q", q);
+            logger->add("lowcmd_config_id", configuration_id);
+        }
     }
 
     if (log_inference_outputs_)
@@ -401,23 +515,19 @@ void State_RLBase::run()
 
     if (log_commands_)
     {
-        logger->add("cmd_boost", env->boost_active() ? 1.0f : 0.0f);
+        logger->add("cmd_boost", env->boost_active() ? "1" : "0");
         logger->add("cmd_ns_0", lowstate->joystick.ly());
         logger->add("cmd_ns_1", -lowstate->joystick.lx());
         logger->add("cmd_ns_2", -lowstate->joystick.rx());
 
-        float fixed_0 = 0.0f;
-        float fixed_1 = 0.0f;
-        float fixed_2 = 0.0f;
-        if (env->fixed_command_enabled && env->fixed_command_active)
+        if (env->fixed_command_enabled)
         {
-            fixed_0 = env->fixed_lin_vel_x;
-            fixed_1 = env->fixed_lin_vel_y;
-            fixed_2 = env->fixed_ang_vel_z;
+            const bool active = env->fixed_command_active;
+            logger->add("cmd_fixed_active", active ? "1" : "0");
+            logger->add("cmd_fixed_0", active ? env->fixed_lin_vel_x : 0.0f);
+            logger->add("cmd_fixed_1", active ? env->fixed_lin_vel_y : 0.0f);
+            logger->add("cmd_fixed_2", active ? env->fixed_ang_vel_z : 0.0f);
         }
-        logger->add("cmd_fixed_0", fixed_0);
-        logger->add("cmd_fixed_1", fixed_1);
-        logger->add("cmd_fixed_2", fixed_2);
     }
 
     logger->write();

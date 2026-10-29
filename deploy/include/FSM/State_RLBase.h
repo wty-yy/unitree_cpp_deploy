@@ -8,6 +8,7 @@
 #include "isaaclab/envs/mdp/terminations.h"
 #include "DataLogger.h"
 #include "utils/filters/joint_vector_filter.h"
+#include "utils/G1LoggingTelemetry.h"
 #include <chrono>
 
 class State_RLBase : public FSMState
@@ -81,6 +82,11 @@ private:
     bool log_robot_state_ = true;
     bool log_commands_ = true;
     bool log_inference_outputs_ = true;
+    bool log_torso_imu_ = true;
+    bool log_lowcmd_ = true;
+    bool logging_metadata_written_ = false;
+    std::unique_ptr<G1LoggingTelemetry> logging_telemetry_;
+    nlohmann::json logging_metadata_;
     std::chrono::steady_clock::time_point last_log_time;
     std::chrono::steady_clock::time_point start_time;
 

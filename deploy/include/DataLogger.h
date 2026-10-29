@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -9,6 +10,7 @@
 #include <filesystem>
 #include <iomanip>
 #include <sstream>
+#include <nlohmann/json.hpp>
 
 class DataLogger {
 public:
@@ -64,30 +66,60 @@ public:
     void write() {
         if (!file_.is_open()) return;
 
+        std::stringstream row;
         if (first_write_) {
             // Write header
             bool first = true;
             for (const auto& key : headers_) {
-                if (!first) file_ << ",";
-                file_ << key;
+                if (!first) row << ",";
+                row << key;
                 first = false;
             }
-            file_ << "\n";
+            row << "\n";
             first_write_ = false;
         }
 
         // Write data
         bool first = true;
         for (const auto& key : headers_) {
-            if (!first) file_ << ",";
+            if (!first) row << ",";
             if (data_.count(key)) {
-                file_ << data_[key];
+                row << data_[key];
             }
             first = false;
         }
-        file_ << "\n";
+        row << "\n";
+        file_ << row.str();
+        file_.flush();
         
         data_.clear();
+    }
+
+    void write_metadata(nlohmann::json metadata) {
+        auto path = std::filesystem::path(filename_);
+        metadata["events_file"] = path.replace_extension(".events.jsonl").filename().string();
+        path = filename_;
+        std::ofstream metadata_file(path.replace_extension(".metadata.json"));
+        metadata_file << metadata.dump(2) << "\n";
+    }
+
+    std::size_t record_configuration(const std::string& kind, const nlohmann::json& value,
+                                     double time, double unix_time) {
+        const auto previous = configurations_.find(kind);
+        if (previous != configurations_.end() && previous->second.value == value) {
+            return previous->second.id;
+        }
+        const std::size_t id = previous == configurations_.end() ? 0 : previous->second.id + 1;
+        if (!events_file_.is_open()) {
+            auto path = std::filesystem::path(filename_);
+            events_file_.open(path.replace_extension(".events.jsonl"));
+        }
+        events_file_ << nlohmann::json{
+            {"kind", kind}, {"id", id}, {"time", time}, {"unix_time", unix_time}, {"values", value}
+        }.dump() << "\n";
+        events_file_.flush();
+        configurations_[kind] = {value, id};
+        return id;
     }
 
 private:
@@ -96,4 +128,10 @@ private:
     std::map<std::string, std::string> data_;
     std::vector<std::string> headers_;
     bool first_write_ = true;
+    struct Configuration {
+        nlohmann::json value;
+        std::size_t id;
+    };
+    std::ofstream events_file_;
+    std::map<std::string, Configuration> configurations_;
 };

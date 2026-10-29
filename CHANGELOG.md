@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 20261029 v0.7
+
+1. Add `recurrent_height_map` policy inference with observation history, LSTM state, and reset support
+2. Add paired DDS height-map and missing-mask inputs with validation, timeout handling, and zero velocity commands when unavailable
+3. Add ONNX input-size validation and recurrent-policy, height-map, and logging tests
+4. Extend RL logging with torso IMU, published `LowCmd`, telemetry validity, configuration events, and per-run metadata
+
 ## 20261026 v0.6.9
 
 1. Add command-driven `step_frequency` and `step_phase` observations with smoothed frequency, standstill freezing, random reset phase, and one update per control step
