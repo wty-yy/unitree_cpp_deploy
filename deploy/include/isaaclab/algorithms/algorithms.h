@@ -4,6 +4,8 @@
 #pragma once
 
 #include "onnxruntime_cxx_api.h"
+#include <chrono>
+#include <limits>
 #include <mutex>
 #include <map>
 #include <unordered_map>
@@ -25,10 +27,14 @@ public:
         std::lock_guard<std::mutex> lock(act_mtx_);
         return action;
     }
+
+    // Read by the policy thread; the logging snapshot carries it to other threads.
+    double last_onnx_inference_ms() const { return last_onnx_inference_ms_; }
     
     std::vector<float> action;
 protected:
     std::mutex act_mtx_;
+    double last_onnx_inference_ms_ = std::numeric_limits<double>::quiet_NaN();
 };
 
 class OrtRunner : public Algorithms
@@ -125,7 +131,10 @@ public:
             input_tensors.push_back(std::move(input_tensor));
         }
 
+        const auto inference_start = std::chrono::steady_clock::now();
         auto output_tensors = session->Run(Ort::RunOptions{nullptr}, input_names.data(), input_tensors.data(), input_tensors.size(), output_names.data(), output_names.size());
+        last_onnx_inference_ms_ = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - inference_start).count();
         
         std::map<std::string, std::vector<float>> results;
         for(size_t i=0; i<output_tensors.size(); i++) {

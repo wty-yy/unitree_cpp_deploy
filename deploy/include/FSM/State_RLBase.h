@@ -24,6 +24,8 @@ public:
             return;
         }
 
+        start_logging();
+
         // set gain
         for (int i = 0; i < env->robot->data.joint_stiffness.size(); ++i)
         {
@@ -71,14 +73,16 @@ public:
     }
 
 private:
+    void start_logging();
+
     std::unique_ptr<isaaclab::ManagerBasedRLEnv> env;
     std::unique_ptr<DataLogger> logger;
     bool enable_logging = false;
     std::chrono::duration<double> logging_dt{0.02};
-    bool log_obs_terms_ = true;
+    bool log_obs_terms_ = false;
     bool log_obs_ = true;
     bool log_action_raw_ = true;
-    bool log_action_q_des_ = true;
+    bool log_action_q_des_ = false;
     bool log_robot_state_ = true;
     bool log_commands_ = true;
     bool log_inference_outputs_ = true;

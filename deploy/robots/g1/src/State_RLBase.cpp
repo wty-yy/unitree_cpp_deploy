@@ -149,10 +149,10 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
     }
 
     enable_logging = cfg["logging"] ? cfg["logging"].as<bool>() : false;
-    log_obs_terms_ = logging_option_enabled(cfg, "obs_terms");
+    log_obs_terms_ = logging_option_enabled(cfg, "obs_terms", false);
     log_obs_ = logging_option_enabled(cfg, "obs");
     log_action_raw_ = logging_option_enabled(cfg, "action_raw");
-    log_action_q_des_ = logging_option_enabled(cfg, "action_q_des");
+    log_action_q_des_ = logging_option_enabled(cfg, "action_q_des", false);
     log_robot_state_ = logging_option_enabled(cfg, "robot_state");
     log_commands_ = logging_option_enabled(cfg, "commands");
     log_inference_outputs_ = logging_option_enabled(cfg, "inference_outputs");
@@ -171,24 +171,6 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
             logging_dt = std::chrono::duration<double>(env->step_dt);
         }
 
-        auto now = std::chrono::system_clock::now();
-        auto in_time_t = std::chrono::system_clock::to_time_t(now);
-        std::stringstream ss;
-        ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d_%H-%M-%S");
-        const std::string run_name = "run_data_" + ss.str();
-        const std::string filename = run_name + ".csv";
-        const auto logs_dir = policy_dir / "logs" / run_name;
-        if (!std::filesystem::exists(logs_dir))
-        {
-            std::filesystem::create_directories(logs_dir);
-        }
-
-        const auto file_path = (logs_dir / filename).string();
-        logger = std::make_unique<DataLogger>(file_path);
-        if (log_torso_imu_ || log_lowcmd_)
-        {
-            logging_telemetry_ = std::make_unique<G1LoggingTelemetry>(log_torso_imu_, log_lowcmd_);
-        }
         logging_metadata_ = {
             {"format_version", 2},
             {"state", state_string},
@@ -197,6 +179,8 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
             {"fsm_config_yaml", YAML::Dump(cfg)},
             {"deploy_config_yaml", YAML::Dump(env->cfg)},
             {"telemetry_timeout_ms", 100},
+            {"onnx_inference_ms", "Wall-clock milliseconds for Ort::Session::Run only; excludes observation computation, tensor preparation and output copying"},
+            {"inference_seq", "Inference counter across state re-entry; sampled log rows may repeat or skip inference results"},
             {"torso_imu_topic", "rt/secondary_imu"},
             {"lowcmd_topic", "rt/lowcmd"},
             {"quaternion_order", "wxyz"},
@@ -206,10 +190,6 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
             {"lowcmd_q", "Latest received published LowCmd, in joint_ids_map order; not the pending policy target"},
             {"telemetry_age_ms", "Elapsed steady-clock time since message reception; not a hardware timestamp"}
         };
-        spdlog::info("State_{} logging enabled. Saving to {} at {:.4f}s", state_string, file_path, logging_dt.count());
-
-        start_time = std::chrono::steady_clock::now();
-        last_log_time = start_time - std::chrono::duration_cast<std::chrono::steady_clock::duration>(logging_dt);
     }
 
     if (cfg["fixed_command"] && cfg["fixed_command"]["enabled"])
@@ -233,6 +213,37 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
             spdlog::info("Press [L2 + Y] to toggle fixed command execution");
         }
     }
+}
+
+void State_RLBase::start_logging()
+{
+    if (!enable_logging || logger)
+    {
+        return;
+    }
+
+    auto now = std::chrono::system_clock::now();
+    auto in_time_t = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d_%H-%M-%S");
+    const std::string run_name = "run_data_" + ss.str();
+    const std::string filename = run_name + ".csv";
+    const auto logs_dir = std::filesystem::path(logging_metadata_["policy_dir"].get<std::string>()) / "logs" / run_name;
+    if (!std::filesystem::exists(logs_dir))
+    {
+        std::filesystem::create_directories(logs_dir);
+    }
+
+    const auto file_path = (logs_dir / filename).string();
+    logger = std::make_unique<DataLogger>(file_path);
+    if (log_torso_imu_ || log_lowcmd_)
+    {
+        logging_telemetry_ = std::make_unique<G1LoggingTelemetry>(log_torso_imu_, log_lowcmd_);
+    }
+    spdlog::info("State_{} logging enabled. Saving to {} at {:.4f}s", logging_metadata_["state"].get<std::string>(), file_path, logging_dt.count());
+
+    start_time = std::chrono::steady_clock::now();
+    last_log_time = start_time - std::chrono::duration_cast<std::chrono::steady_clock::duration>(logging_dt);
 }
 
 void State_RLBase::run()
@@ -315,7 +326,7 @@ void State_RLBase::run()
         !snapshot.observation_terms.empty() ||
         !snapshot.raw_action.empty() ||
         !snapshot.inference_results.empty();
-    if (snapshot_required && !snapshot_ready)
+    if (snapshot.inference_seq == 0 || (snapshot_required && !snapshot_ready))
     {
         return;
     }
@@ -339,6 +350,8 @@ void State_RLBase::run()
 
     const std::chrono::duration<double> time_since_start = now - start_time;
     logger->add("time", time_since_start.count());
+    logger->add("onnx_inference_ms", snapshot.onnx_inference_ms);
+    logger->add("inference_seq", std::to_string(snapshot.inference_seq));
 
     const auto system_now = std::chrono::system_clock::now();
     const auto epoch_duration = system_now.time_since_epoch();

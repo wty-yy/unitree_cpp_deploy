@@ -42,6 +42,7 @@ int main(int argc, char** argv) {
         config["FSM"]["Velocity_X"]["policy_dir"] = policy.string();
         config["FSM"]["Velocity_X"]["logging"] = true;
         config["FSM"]["Velocity_X"]["logging_dt"] = 0.001;
+        config["FSM"]["Velocity_X"].remove("logging_options");
         config["FSM"]["Velocity_X"]["transitions"] = YAML::Node(YAML::NodeType::Map);
         config["FSM"]["Velocity_X"]["enable_bad_orientation_check"] = false;
         param::config = config;
@@ -65,6 +66,7 @@ int main(int argc, char** argv) {
         std::filesystem::path csv_path;
         {
             State_RLBase state(7, "Velocity_X");
+            check(!std::filesystem::exists(policy / "logs"), "constructing an inactive model created logs");
             state.enter();
             struct ExitGuard {
                 State_RLBase& state;
@@ -95,6 +97,9 @@ int main(int argc, char** argv) {
             check(std::find(header.begin(), header.end(), "cmd_fixed_0") == header.end(), "disabled fixed commands retained");
             check(std::find(header.begin(), header.end(), "q_des_0") == header.end(), "pending target duplicated alongside LowCmd");
             column("obs_979");
+            const auto inference_ms = std::stod(rows[1][column("onnx_inference_ms")]);
+            check(std::isfinite(inference_ms) && inference_ms > 0.0, "ONNX inference time is missing or invalid");
+            check(std::stoull(rows[1][column("inference_seq")]) > 0, "inference sequence is missing");
 
             unitree::robot::ChannelPublisher<unitree_hg::msg::dds_::IMUState_> imu("rt/secondary_imu");
             unitree::robot::ChannelPublisher<unitree_hg::msg::dds_::LowCmd_> command("rt/lowcmd");
@@ -148,6 +153,26 @@ int main(int argc, char** argv) {
             check(rows.back()[column("torso_imu_valid")] == "0", "stale torso data reported fresh");
             check(rows.back()[column("lowcmd_valid")] == "0", "stale LowCmd reported fresh");
             for (const auto& row : rows) check(row.size() == header.size(), "incomplete CSV row");
+            std::uint64_t previous_inference = 0;
+            for (std::size_t i = 1; i < rows.size(); ++i) {
+                const auto sequence = std::stoull(rows[i][column("inference_seq")]);
+                check(sequence >= previous_inference, "inference sequence moved backwards");
+                const double duration = std::stod(rows[i][column("onnx_inference_ms")]);
+                check(std::isfinite(duration) && duration > 0.0, "invalid logged ONNX duration");
+                previous_inference = sequence;
+            }
+            state.exit();
+            state.enter();
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            state.run();
+            check(read_csv(csv_path).size() > rows.size(), "re-entering model did not append to its existing log");
+            check(std::stoull(read_csv(csv_path).back()[column("inference_seq")]) > previous_inference,
+                  "inference sequence reset on state re-entry");
+            int csv_count = 0;
+            for (const auto& entry : std::filesystem::recursive_directory_iterator(policy / "logs")) {
+                if (entry.path().extension() == ".csv") ++csv_count;
+            }
+            check(csv_count == 1, "re-entering model created another log");
             state.exit();
             std::cout << "CSV_COLUMNS=" << header.size() << " ROWS=" << rows.size() - 1 << std::endl;
         }
@@ -157,6 +182,8 @@ int main(int argc, char** argv) {
         nlohmann::json metadata;
         metadata_file >> metadata;
         check(metadata["format_version"] == 2, "metadata format missing");
+        check(metadata.contains("onnx_inference_ms"), "inference timing scope missing from metadata");
+        check(metadata.contains("inference_seq"), "inference sequence description missing from metadata");
         check(metadata["observation_terms"].size() == 7, "observation layout missing");
         auto events_path = csv_path;
         events_path.replace_extension(".events.jsonl");

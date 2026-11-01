@@ -34,6 +34,8 @@ int main(int argc, char** argv)
             for (const auto& frame : fixture) {
                 image = frame.at("depth").get<std::vector<float>>();
                 auto result = runner.forward({{"single_obs",frame.at("single_obs").get<std::vector<float>>()}});
+                require(std::isfinite(runner.last_onnx_inference_ms()) && runner.last_onnx_inference_ms() > 0.0,
+                        "Recurrent ONNX inference timing is invalid");
                 for (const auto* name : {"actions","obs_history_out","h_out","c_out"}) {
                     const auto expected = frame.at(name).get<std::vector<float>>();
                     require(result.at(name).size() == expected.size(), "Output shape mismatch");

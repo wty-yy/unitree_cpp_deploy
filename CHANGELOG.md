@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 20261101 v0.7.1
+
+1. Default `obs_terms` and `action_q_des` to `false` while keeping other RL logging categories enabled
+2. Start RL logging on first state entry and append to the existing log on state re-entry
+3. Record `onnx_inference_ms` around `Ort::Session::Run` with matching `inference_seq` in RL logs
+4. Extend regression tests for logging defaults, state entry/re-entry, and feedforward/recurrent inference timing
+
 ## 20261029 v0.7
 
 1. Add `recurrent_height_map` policy inference with observation history, LSTM state, and reset support

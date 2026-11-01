@@ -13,6 +13,8 @@
 #include "utils/VelocityCommandBoost.h"
 #include "utils/PolicyHeightMap.h"
 #include <iostream>
+#include <cstdint>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <random>
@@ -31,6 +33,8 @@ struct PolicyLoggingSnapshot
     std::map<std::string, std::vector<float>> inference_results;
     std::vector<float> raw_action;
     std::vector<float> processed_action;
+    double onnx_inference_ms = std::numeric_limits<double>::quiet_NaN();
+    std::uint64_t inference_seq = 0;
 };
 
 class ManagerBasedRLEnv
@@ -146,6 +150,8 @@ public:
             last_policy_snapshot_.inference_results = inference_results;
             last_policy_snapshot_.raw_action = action;
             last_policy_snapshot_.processed_action = processed_action;
+            last_policy_snapshot_.onnx_inference_ms = alg->last_onnx_inference_ms();
+            ++last_policy_snapshot_.inference_seq;
             last_inference_results = inference_results;
         }
     }
