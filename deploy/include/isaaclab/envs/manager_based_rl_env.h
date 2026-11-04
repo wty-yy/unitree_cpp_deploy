@@ -13,6 +13,9 @@
 #include "utils/ExternalVelocity.h"
 #include "utils/PolicyHeightMap.h"
 #include <iostream>
+#include <cstdint>
+#include <limits>
+#include <mutex>
 #include <map>
 #include <string>
 #include <spdlog/spdlog.h>
@@ -22,6 +25,17 @@ namespace isaaclab
 
 class ObservationManager;
 class ActionManager;
+
+struct PolicyLoggingSnapshot
+{
+    std::vector<std::pair<std::string, std::vector<float>>> observation_groups;
+    std::vector<ObservationTermSnapshot> observation_terms;
+    std::map<std::string, std::vector<float>> inference_results;
+    std::vector<float> raw_action;
+    std::vector<float> processed_action;
+    double onnx_inference_ms = std::numeric_limits<double>::quiet_NaN();
+    std::uint64_t inference_seq = 0;
+};
 
 class ManagerBasedRLEnv
 {
@@ -124,16 +138,34 @@ public:
         }
         auto obs = observation_manager->compute();
         
-        last_inference_results = alg->forward(obs);
+        auto inference_results = alg->forward(obs);
         
         std::vector<float> action;
-        if (last_inference_results.count("actions")) {
-            action = last_inference_results["actions"];
-        } else if (!last_inference_results.empty()) {
-            action = last_inference_results.begin()->second;
+        if (inference_results.count("actions")) {
+            action = inference_results["actions"];
+        } else if (!inference_results.empty()) {
+            action = inference_results.begin()->second;
         }
         
         action_manager->process_action(action);
+        if (policy_logging_enabled)
+        {
+            std::lock_guard<std::mutex> lock(policy_snapshot_mutex_);
+            last_policy_snapshot_.observation_groups = observation_manager->last_group_observations();
+            last_policy_snapshot_.observation_terms = observation_manager->last_term_observations();
+            last_policy_snapshot_.inference_results = inference_results;
+            last_policy_snapshot_.raw_action = action;
+            last_policy_snapshot_.processed_action = action_manager->processed_actions();
+            last_policy_snapshot_.onnx_inference_ms = alg->last_onnx_inference_ms();
+            ++last_policy_snapshot_.inference_seq;
+        }
+        last_inference_results = std::move(inference_results);
+    }
+
+    PolicyLoggingSnapshot get_policy_logging_snapshot() const
+    {
+        std::lock_guard<std::mutex> lock(policy_snapshot_mutex_);
+        return last_policy_snapshot_;
     }
 
     const std::vector<float>& velocity_command() const
@@ -177,6 +209,8 @@ public:
         else velocity_command_damper_.clear_external_command();
     }
 
+    bool policy_logging_enabled = false;
+
     float step_dt;
     
     YAML::Node policy_cfg;
@@ -206,6 +240,8 @@ public:
     std::chrono::steady_clock::time_point fixed_command_start_time;
 
 private:
+    mutable std::mutex policy_snapshot_mutex_;
+    PolicyLoggingSnapshot last_policy_snapshot_;
     utils::VelocityCommandDamper velocity_command_damper_;
 };
 

@@ -5,12 +5,42 @@
 #include "isaaclab/envs/mdp/actions/joint_actions.h"
 
 #include <cstdint>
+#include <ctime>
+#include <iomanip>
+#include <limits>
+#include <sstream>
 #include <memory>
 #include <stdexcept>
 #include <unordered_map>
 
 namespace
 {
+bool logging_option_enabled(const YAML::Node& cfg, const std::string& key, bool default_value = true)
+{
+    if (cfg["logging_options"] && cfg["logging_options"][key])
+    {
+        return cfg["logging_options"][key].as<bool>();
+    }
+    return default_value;
+}
+
+std::string observation_group_log_key(const std::string& group_name)
+{
+    if (group_name == "obs")
+    {
+        return "obs";
+    }
+    return "obs_" + group_name;
+}
+
+std::string observation_term_log_key(const isaaclab::ObservationTermSnapshot& snapshot)
+{
+    if (snapshot.group_name == "obs")
+    {
+        return "obs_" + snapshot.term_name;
+    }
+    return "obs_" + snapshot.group_name + "_" + snapshot.term_name;
+}
 
 struct JointPosPacket
 {
@@ -54,6 +84,12 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
     );
     env->external_velocity_enabled = state_string.rfind("Velocity_", 0) == 0;
     env->alg = std::make_unique<isaaclab::OrtRunner>(policy_dir / "exported" / "policy.onnx");
+    const auto router_config = policy_dir / "exported" / "router.yaml";
+    if (std::filesystem::is_regular_file(router_config)) {
+        const auto experts = YAML::LoadFile(router_config.string())["expert_order"].as<std::vector<std::string>>();
+        policy_selection_ = std::make_unique<utils::PolicySelectionPublisher>(experts);
+    }
+
 
     this->registered_checks.emplace_back(
         std::make_pair(
@@ -62,29 +98,56 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
         )
     );
 
-    // Initialize logger
     const auto logging_cfg = cfg["logging"];
-    if (logging_cfg && logging_cfg["enabled"].as<bool>(false)) {
-        enable_logging = true;
-        if (logging_cfg["dt"]) {
+    enable_logging = logging_cfg && (logging_cfg.IsMap()
+        ? logging_cfg["enabled"].as<bool>(false) : logging_cfg.as<bool>());
+    env->policy_logging_enabled = enable_logging;
+    env->observation_manager->logging_enabled = enable_logging;
+    log_obs_terms_ = logging_option_enabled(cfg, "obs_terms", false);
+    log_obs_ = logging_option_enabled(cfg, "obs");
+    log_action_raw_ = logging_option_enabled(cfg, "action_raw");
+    log_action_q_des_ = logging_option_enabled(cfg, "action_q_des", false);
+    log_robot_state_ = logging_option_enabled(cfg, "robot_state");
+    log_commands_ = logging_option_enabled(cfg, "commands");
+    log_inference_outputs_ = logging_option_enabled(cfg, "inference_outputs");
+    log_lowcmd_ = logging_option_enabled(cfg, "lowcmd");
+
+    if (enable_logging)
+    {
+        logging_dt = std::chrono::duration<double>(env->step_dt);
+        if (cfg["logging_dt"] && !cfg["logging_dt"].IsNull())
+        {
+            logging_dt = std::chrono::duration<double>(cfg["logging_dt"].as<double>());
+        }
+        if (logging_cfg.IsMap() && logging_cfg["dt"])
+        {
             logging_dt = std::chrono::duration<double>(logging_cfg["dt"].as<double>());
         }
-        auto now = std::chrono::system_clock::now();
-        auto in_time_t = std::chrono::system_clock::to_time_t(now);
-        std::stringstream ss;
-        ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d_%H-%M-%S");
-        std::string filename = "run_data_" + ss.str() + ".csv";
-        auto logs_dir = policy_dir / "logs";
-        if (!std::filesystem::exists(logs_dir)) {
-            std::filesystem::create_directories(logs_dir);
+        if (logging_dt.count() <= 0.0)
+        {
+            logging_dt = std::chrono::duration<double>(env->step_dt);
         }
-        auto file_path = (logs_dir / filename).string();
-        logger = std::make_unique<DataLogger>(file_path);
-        spdlog::info("Logging enabled. Saving to {}", file_path);
-        
-        start_time = std::chrono::steady_clock::now();
-        last_log_time = start_time - std::chrono::duration_cast<std::chrono::steady_clock::duration>(logging_dt);
+
+        logging_metadata_ = {
+            {"format_version", 2},
+            {"state", state_string},
+            {"policy_dir", std::filesystem::weakly_canonical(policy_dir).string()},
+            {"joint_ids_map", env->policy_cfg["joint_ids_map"].as<std::vector<int>>()},
+            {"fsm_config_yaml", YAML::Dump(cfg)},
+            {"deploy_config_yaml", YAML::Dump(env->policy_cfg)},
+            {"telemetry_timeout_ms", 100},
+            {"onnx_inference_ms", "Wall-clock milliseconds for Ort::Session::Run only; excludes observation computation, tensor preparation and output copying"},
+            {"inference_seq", "Inference counter across state re-entry; sampled log rows may repeat or skip inference results"},
+            {"lowcmd_topic", "rt/lowcmd"},
+            {"quaternion_order", "wxyz"},
+            {"angle_units", "rad"},
+            {"lowcmd_config_id", "References kind=lowcmd in events_file; kp/kd/dq/tau/mode are recorded initially and on change"},
+            {"temperature_id", "References kind=temperature in events_file; one sensor value per motor, in joint_ids_map order"},
+            {"lowcmd_q", "Latest received published LowCmd, in joint_ids_map order; not the pending policy target"},
+            {"telemetry_age_ms", "Elapsed steady-clock time since message reception; not a hardware timestamp"}
+        };
     }
+
 
     if (cfg["joint_pos_udp"] && cfg["joint_pos_udp"]["enabled"].as<bool>(false)) {
         const auto udp_cfg = cfg["joint_pos_udp"];
@@ -128,6 +191,37 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
             spdlog::info("Press [L2 + Y] to toggle fixed command execution");
         }
     }
+}
+
+void State_RLBase::start_logging()
+{
+    if (!enable_logging || logger)
+    {
+        return;
+    }
+
+    auto now = std::chrono::system_clock::now();
+    auto in_time_t = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d_%H-%M-%S");
+    const std::string run_name = "run_data_" + ss.str();
+    const std::string filename = run_name + ".csv";
+    const auto logs_dir = std::filesystem::path(logging_metadata_["policy_dir"].get<std::string>()) / "logs" / run_name;
+    if (!std::filesystem::exists(logs_dir))
+    {
+        std::filesystem::create_directories(logs_dir);
+    }
+
+    const auto file_path = (logs_dir / filename).string();
+    logger = std::make_unique<DataLogger>(file_path);
+    if (log_lowcmd_)
+    {
+        logging_telemetry_ = std::make_unique<Go2LoggingTelemetry>();
+    }
+    spdlog::info("State_{} logging enabled. Saving to {} at {:.4f}s", logging_metadata_["state"].get<std::string>(), file_path, logging_dt.count());
+
+    start_time = std::chrono::steady_clock::now();
+    last_log_time = start_time - std::chrono::duration_cast<std::chrono::steady_clock::duration>(logging_dt);
 }
 
 void State_RLBase::run()
@@ -187,89 +281,226 @@ void State_RLBase::run()
         }
     }
 
-    // Logging
-    if (enable_logging && logger) {
-        auto now = std::chrono::steady_clock::now();
-        if (now - last_log_time >= logging_dt) {
-            last_log_time = now;
-            
-            std::chrono::duration<double> time_since_start = now - start_time;
-            logger->add("time", time_since_start.count());
-            
-            auto system_now = std::chrono::system_clock::now();
-            auto duration = system_now.time_since_epoch();
-            double unix_time = std::chrono::duration_cast<std::chrono::duration<double>>(duration).count();
-            std::stringstream ss_unix;
-            ss_unix << std::fixed << std::setprecision(2) << unix_time;
-            logger->add("unix_time", ss_unix.str());
+    if (!enable_logging || !logger)
+    {
+        return;
+    }
 
-            std::time_t now_c = std::chrono::system_clock::to_time_t(system_now);
-            auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() % 1000;
-            std::stringstream ss_wall;
-            ss_wall << std::put_time(std::localtime(&now_c), "%H:%M:%S") << '.' << std::setw(2) << std::setfill('0') << (ms / 10);
-            logger->add("wall_time", ss_wall.str());
+    const auto now = std::chrono::steady_clock::now();
+    if (now - last_log_time < logging_dt)
+    {
+        return;
+    }
 
-            logger->add("q_des", action);
-            std::vector<float> q, dq, tau, temp;
-            for (int i(0); i < 12; ++i) {
-                q.push_back(lowstate->msg_.motor_state()[i].q());
-                dq.push_back(lowstate->msg_.motor_state()[i].dq());
-                tau.push_back(lowstate->msg_.motor_state()[i].tau_est());
-                temp.push_back(lowstate->msg_.motor_state()[i].temperature());
-            }
-            logger->add("q", q);
-            logger->add("dq", dq);
-            logger->add("tau", tau);
-            logger->add("temp", temp);
+    const auto snapshot = env->get_policy_logging_snapshot();
+    const bool snapshot_required = log_obs_terms_ || log_obs_ || log_action_raw_ || log_inference_outputs_;
+    const bool snapshot_ready =
+        !snapshot.observation_groups.empty() ||
+        !snapshot.observation_terms.empty() ||
+        !snapshot.raw_action.empty() ||
+        !snapshot.inference_results.empty();
+    if (snapshot.inference_seq == 0 || (snapshot_required && !snapshot_ready))
+    {
+        return;
+    }
 
-            std::vector<float> rpy(3), acc(3), gyro(3);
-            for (int i(0); i < 3; ++i) {
-                rpy[i] = lowstate->msg_.imu_state().rpy()[i];
-                acc[i] = lowstate->msg_.imu_state().accelerometer()[i];
-                gyro[i] = lowstate->msg_.imu_state().gyroscope()[i];
-            }
-            logger->add("imu_rpy", rpy);
-            logger->add("imu_acc", acc);
-            logger->add("ang_vel", gyro);
+    if (!logging_metadata_written_)
+    {
+        logging_metadata_["observation_terms"] = nlohmann::json::array();
+        for (const auto& term : snapshot.observation_terms)
+        {
+            logging_metadata_["observation_terms"].push_back({
+                {"group", term.group_name}, {"term", term.term_name}, {"flattened_size", term.values.size()}
+            });
+        }
+        logging_metadata_["observations_use_gym_history"] = env->policy_cfg["observations"]["use_gym_history"].as<bool>(false);
+        logging_metadata_["observation_history_order"] = "oldest first";
+        logger->write_metadata(logging_metadata_);
+        logging_metadata_written_ = true;
+    }
 
-            std::vector<float> foot_force(4);
-            for (int i(0); i < 4; ++i) {
-                foot_force[i] = lowstate->msg_.foot_force()[i];
-            }
-            logger->add("foot_force", foot_force);
+    last_log_time = now;
 
-            std::vector<float> foot_contacts(4);
-            for (int i(0); i < 4; ++i) {
-                foot_contacts[i] = (foot_force[i] > 10.0f) ? 1.0f : 0.0f;
-            }
-            logger->add("foot_contact", foot_contacts);
+    const std::chrono::duration<double> time_since_start = now - start_time;
+    logger->add("time", time_since_start.count());
+    logger->add("onnx_inference_ms", snapshot.onnx_inference_ms);
+    logger->add("inference_seq", std::to_string(snapshot.inference_seq));
 
-            if (env->last_inference_results.count("weights")) {
-                logger->add("weight", env->last_inference_results["weights"]);
-            }
-            if (env->last_inference_results.count("latent")) {
-                logger->add("latent", env->last_inference_results["latent"]);
-            }
+    const auto system_now = std::chrono::system_clock::now();
+    const auto epoch_duration = system_now.time_since_epoch();
+    const double unix_time =
+        std::chrono::duration_cast<std::chrono::duration<double>>(epoch_duration).count();
+    std::stringstream ss_unix;
+    ss_unix << std::fixed << std::setprecision(2) << unix_time;
+    logger->add("unix_time", ss_unix.str());
 
-            // Joystick commands (no scaling)
-            logger->add("cmd_ns_0", lowstate->joystick.ly());
-            logger->add("cmd_ns_1", -lowstate->joystick.lx());
-            logger->add("cmd_ns_2", -lowstate->joystick.rx());
+    const std::time_t now_c = std::chrono::system_clock::to_time_t(system_now);
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(epoch_duration).count() % 1000;
+    std::stringstream ss_wall;
+    ss_wall << std::put_time(std::localtime(&now_c), "%H:%M:%S")
+            << '.'
+            << std::setw(2)
+            << std::setfill('0')
+            << (ms / 10);
+    logger->add("wall_time", ss_wall.str());
 
-            // Fixed command (log zeros when inactive)
-            float fixed_0 = 0.0f;
-            float fixed_1 = 0.0f;
-            float fixed_2 = 0.0f;
-            if (env->fixed_command_enabled && env->fixed_command_active) {
-                fixed_0 = env->fixed_lin_vel_x;
-                fixed_1 = env->fixed_lin_vel_y;
-                fixed_2 = env->fixed_ang_vel_z;
-            }
-            logger->add("cmd_fixed_0", fixed_0);
-            logger->add("cmd_fixed_1", fixed_1);
-            logger->add("cmd_fixed_2", fixed_2);
-
-            logger->write();
+    if (log_obs_terms_)
+    {
+        for (const auto& term_snapshot : snapshot.observation_terms)
+        {
+            logger->add(observation_term_log_key(term_snapshot), term_snapshot.values);
         }
     }
+
+    if (log_obs_)
+    {
+        for (const auto& group_snapshot : snapshot.observation_groups)
+        {
+            logger->add(observation_group_log_key(group_snapshot.first), group_snapshot.second);
+        }
+    }
+
+    if (log_action_raw_ && !snapshot.raw_action.empty())
+    {
+        logger->add("action_raw", snapshot.raw_action);
+    }
+
+    if (log_action_q_des_)
+    {
+        logger->add("q_des", snapshot.processed_action);
+    }
+
+    if (log_robot_state_)
+    {
+        // Keep all recorded motor/IMU fields from the same LowState message.
+        const auto state = [this] {
+            std::lock_guard<std::mutex> lock(lowstate->mutex_);
+            return lowstate->msg_;
+        }();
+        const auto& joint_ids = env->robot->data.joint_ids_map;
+        std::vector<float> q;
+        std::vector<float> dq;
+        std::vector<float> tau;
+        std::vector<int> temp;
+        q.reserve(joint_ids.size());
+        dq.reserve(joint_ids.size());
+        tau.reserve(joint_ids.size());
+        temp.reserve(joint_ids.size());
+        for (int i = 0; i < joint_ids.size(); ++i)
+        {
+            const int joint_id = static_cast<int>(joint_ids[i]);
+            const auto& motor = state.motor_state()[joint_id];
+            q.push_back(motor.q());
+            dq.push_back(motor.dq());
+            tau.push_back(motor.tau_est());
+
+            temp.push_back(static_cast<int>(motor.temperature()));
+        }
+        logger->add("q", q);
+        logger->add("dq", dq);
+        logger->add("tau", tau);
+        logger->add("temperature_id", std::to_string(logger->record_configuration(
+            "temperature", temp, time_since_start.count(), unix_time)));
+        logger->add("lowstate_tick", std::to_string(state.tick()));
+
+        std::vector<float> imu_rpy(3);
+        std::vector<float> imu_acc(3);
+        std::vector<float> ang_vel(3);
+        for (int i = 0; i < 3; ++i)
+        {
+            imu_rpy[i] = state.imu_state().rpy()[i];
+            imu_acc[i] = state.imu_state().accelerometer()[i];
+            ang_vel[i] = state.imu_state().gyroscope()[i];
+        }
+        logger->add("imu_rpy", imu_rpy);
+        logger->add("imu_acc", imu_acc);
+        logger->add("ang_vel", ang_vel);
+
+        std::vector<float> imu_quat(4);
+        for (int i = 0; i < 4; ++i)
+        {
+            imu_quat[i] = state.imu_state().quaternion()[i];
+        }
+        logger->add("imu_quat", imu_quat);
+        std::vector<float> foot_force(4), foot_contact(4);
+        for (int i = 0; i < 4; ++i)
+        {
+            foot_force[i] = state.foot_force()[i];
+            foot_contact[i] = foot_force[i] > 10.0f ? 1.0f : 0.0f;
+        }
+        logger->add("foot_force", foot_force);
+        logger->add("foot_contact", foot_contact);
+    }
+
+    if (logging_telemetry_)
+    {
+        const auto telemetry = logging_telemetry_->snapshot();
+        const auto received_now = std::chrono::steady_clock::now();
+        const float missing = std::numeric_limits<float>::quiet_NaN();
+        if (log_lowcmd_)
+        {
+            const float age = telemetry.lowcmd_sequence
+                ? std::chrono::duration<float, std::milli>(received_now - telemetry.lowcmd_received).count() : missing;
+            logger->add("lowcmd_valid", telemetry.lowcmd_sequence && age <= 100.0f ? "1" : "0");
+            logger->add("lowcmd_age_ms", age);
+            logger->add("lowcmd_seq", std::to_string(telemetry.lowcmd_sequence));
+            std::vector<float> q(env->robot->data.joint_ids_map.size(), missing);
+            std::string configuration_id = "-1";
+            if (telemetry.lowcmd_sequence)
+            {
+                std::vector<float> kp, kd, dq, tau;
+                std::vector<int> mode;
+                for (std::size_t i = 0; i < q.size(); ++i)
+                {
+                    const auto& motor = telemetry.lowcmd.motor_cmd()[static_cast<int>(env->robot->data.joint_ids_map[i])];
+                    q[i] = motor.q();
+                    kp.push_back(motor.kp());
+                    kd.push_back(motor.kd());
+                    dq.push_back(motor.dq());
+                    tau.push_back(motor.tau());
+                    mode.push_back(motor.mode());
+                }
+                configuration_id = std::to_string(logger->record_configuration("lowcmd", {
+                    {"kp", kp}, {"kd", kd}, {"dq", dq}, {"tau", tau}, {"motor_mode", mode},
+                    {"level_flag", telemetry.lowcmd.level_flag()}
+                }, time_since_start.count(), unix_time));
+            }
+            logger->add("lowcmd_q", q);
+            logger->add("lowcmd_config_id", configuration_id);
+        }
+    }
+
+    if (log_inference_outputs_)
+    {
+        const auto weights_it = snapshot.inference_results.find("weights");
+        if (weights_it != snapshot.inference_results.end())
+        {
+            logger->add("weight", weights_it->second);
+        }
+
+        const auto latent_it = snapshot.inference_results.find("latent");
+        if (latent_it != snapshot.inference_results.end())
+        {
+            logger->add("latent", latent_it->second);
+        }
+    }
+
+    if (log_commands_)
+    {
+        logger->add("cmd_boost", env->boost_active() ? "1" : "0");
+        logger->add("cmd_ns_0", lowstate->joystick.ly());
+        logger->add("cmd_ns_1", -lowstate->joystick.lx());
+        logger->add("cmd_ns_2", -lowstate->joystick.rx());
+
+        if (env->fixed_command_enabled)
+        {
+            const bool active = env->fixed_command_active;
+            logger->add("cmd_fixed_active", active ? "1" : "0");
+            logger->add("cmd_fixed_0", active ? env->fixed_lin_vel_x : 0.0f);
+            logger->add("cmd_fixed_1", active ? env->fixed_lin_vel_y : 0.0f);
+            logger->add("cmd_fixed_2", active ? env->fixed_ang_vel_z : 0.0f);
+        }
+    }
+
+    logger->write();
 }

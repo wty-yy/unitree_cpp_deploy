@@ -4,6 +4,8 @@
 #pragma once
 
 #include "onnxruntime_cxx_api.h"
+#include <chrono>
+#include <limits>
 #include <mutex>
 #include <map>
 #include <unordered_map>
@@ -29,9 +31,13 @@ public:
         return action;
     }
     
+    // Read on the policy thread and published through its logging snapshot.
+    double last_onnx_inference_ms() const { return last_onnx_inference_ms_; }
+
     std::vector<float> action;
 protected:
     std::mutex act_mtx_;
+    double last_onnx_inference_ms_ = std::numeric_limits<double>::quiet_NaN();
 };
 
 class OrtRunner : public Algorithms
@@ -66,18 +72,36 @@ public:
             }
             input_sizes.push_back(size);
         }
-        const auto depth = std::find(input_names_strings.begin(), input_names_strings.end(), "depth");
-        if (depth != input_names_strings.end()) {
+        auto image_input = std::find(input_names_strings.begin(), input_names_strings.end(), "depth");
+        if (image_input == input_names_strings.end())
+            image_input = std::find(input_names_strings.begin(), input_names_strings.end(), "height_map");
+        if (image_input != input_names_strings.end()) {
+            const bool is_router = *image_input == "height_map";
             const auto channels = session->GetModelMetadata().LookupCustomMetadataMapAllocated("image_channel_names", allocator);
             if (!channels || std::string(channels.get()) != "relative_elevation,missing_mask")
                 throw std::runtime_error("Height-map policy requires relative_elevation,missing_mask metadata.");
-            const auto& image_shape = input_shapes[std::distance(input_names_strings.begin(), depth)];
+            const auto& image_shape = input_shapes[std::distance(input_names_strings.begin(), image_input)];
             if (image_shape != std::vector<int64_t>{1, 2, 17, 11} && image_shape != std::vector<int64_t>{1, 2, 9, 11})
                 throw std::runtime_error("Height-map ONNX depth must have shape [1,2,17,11] or [1,2,9,11].");
-            const std::map<std::string, std::vector<int64_t>> expected{
-                {"single_obs", {1, 45}}, {"depth", image_shape},
-                {"obs_history_in", {1, 450}}, {"h_in", {2, 1, 256}}, {"c_in", {2, 1, 256}}
+            // Router state stacks [router, mixed, climb, stairs] before the LSTM axes.
+            std::vector<int64_t> state_shape = is_router
+                ? std::vector<int64_t>{4, 2, 1, 256} : std::vector<int64_t>{2, 1, 256};
+            if (is_router) {
+                const auto hidden = std::find(input_names_strings.begin(), input_names_strings.end(), "h_in");
+                // All-MLP routers retain one dummy state value per actor for a stable interface.
+                if (hidden != input_names_strings.end() &&
+                    input_shapes[std::distance(input_names_strings.begin(), hidden)] == std::vector<int64_t>{4, 1, 1, 1})
+                    state_shape = {4, 1, 1, 1};
+            }
+            std::map<std::string, std::vector<int64_t>> expected{
+                {"single_obs", {1, 45}}, {*image_input, image_shape}, {"obs_history_in", {1, 450}}
             };
+            // MLP fusion retains observation history without LSTM hidden/cell inputs.
+            if (is_router || std::find(input_names_strings.begin(), input_names_strings.end(), "h_in") != input_names_strings.end() ||
+                std::find(input_names_strings.begin(), input_names_strings.end(), "c_in") != input_names_strings.end()) {
+                expected.emplace("h_in", state_shape);
+                expected.emplace("c_in", state_shape);
+            }
             if (input_names_strings.size() != expected.size())
                 throw std::runtime_error("Unexpected height-map policy inputs.");
             for (size_t i = 0; i < input_names_strings.size(); ++i) {
@@ -170,17 +194,29 @@ public:
             input_tensors.push_back(std::move(input_tensor));
         }
 
+        const auto inference_start = std::chrono::steady_clock::now();
         auto output_tensors = session->Run(Ort::RunOptions{nullptr}, input_names.data(), input_tensors.data(), input_tensors.size(), output_names.data(), output_names.size());
+        last_onnx_inference_ms_ = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - inference_start).count();
         
         std::map<std::string, std::vector<float>> results;
         for(size_t i=0; i<output_tensors.size(); i++) {
-            auto floatarr = output_tensors[i].GetTensorMutableData<float>();
             auto type_info = output_tensors[i].GetTensorTypeAndShapeInfo();
             auto shape = type_info.GetShape();
             size_t count = 1;
             for(auto s : shape) count *= s;
             
-            std::vector<float> val(floatarr, floatarr + count);
+            std::vector<float> val;
+            if (type_info.GetElementType() == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
+                const auto data = output_tensors[i].GetTensorData<float>();
+                val.assign(data, data + count);
+            } else if (output_names_strings[i] == "selected_id" &&
+                       type_info.GetElementType() == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
+                const auto data = output_tensors[i].GetTensorData<int64_t>();
+                val.assign(data, data + count);
+            } else {
+                throw std::runtime_error("Unsupported ONNX output type: " + output_names_strings[i]);
+            }
             if (!std::all_of(val.begin(), val.end(), [](float value) { return std::isfinite(value); }))
                 throw std::runtime_error("Non-finite ONNX output: " + output_names_strings[i]);
             results[output_names_strings[i]] = val;

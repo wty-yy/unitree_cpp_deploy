@@ -7,6 +7,8 @@
 #include "isaaclab/envs/mdp/actions/joint_actions.h"
 #include "isaaclab/envs/mdp/terminations.h"
 #include "DataLogger.h"
+#include "utils/Go2LoggingTelemetry.h"
+#include "utils/PolicySelectionPublisher.h"
 #include <chrono>
 #include <atomic>
 
@@ -21,6 +23,8 @@ public:
             spdlog::warn("State_RLBase::enter: Environment is null. Skipping initialization.");
             return;
         }
+
+        start_logging();
 
         // set gain
         for (int i = 0; i < env->robot->data.joint_stiffness.size(); ++i)
@@ -46,6 +50,7 @@ public:
             while (policy_thread_running)
             {
                 env->step();
+                if (policy_selection_) policy_selection_->publish(env->last_inference_results);
 
                 // Sleep
                 std::this_thread::sleep_until(sleepTill);
@@ -62,13 +67,28 @@ public:
         if (policy_thread.joinable()) {
             policy_thread.join();
         }
+        if (policy_selection_) policy_selection_->clear();
     }
 
 private:
+    void start_logging();
+
     std::unique_ptr<isaaclab::ManagerBasedRLEnv> env;
     std::unique_ptr<DataLogger> logger;
+    std::unique_ptr<utils::PolicySelectionPublisher> policy_selection_;
     bool enable_logging = false;
     std::chrono::duration<double> logging_dt{0.02};
+    bool log_obs_terms_ = false;
+    bool log_obs_ = true;
+    bool log_action_raw_ = true;
+    bool log_action_q_des_ = false;
+    bool log_robot_state_ = true;
+    bool log_commands_ = true;
+    bool log_inference_outputs_ = true;
+    bool log_lowcmd_ = true;
+    bool logging_metadata_written_ = false;
+    std::unique_ptr<Go2LoggingTelemetry> logging_telemetry_;
+    nlohmann::json logging_metadata_;
     std::chrono::steady_clock::time_point last_log_time;
     std::chrono::steady_clock::time_point start_time;
 

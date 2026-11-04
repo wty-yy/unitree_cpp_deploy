@@ -152,6 +152,36 @@ Policy paths resolve relative to [deploy/robots/go2/](deploy/robots/go2/). Repla
 
 See [robot_params.md](docs/robot_params.md) for FSM and button settings, and [obs_group.md](docs/obs_group.md) for observations. Additional resources: [visualization scripts](deploy/tools/) and [Go2 URDF](resources/go2.urdf).
 
+Single-policy CNN-MLP exports use `single_obs`, `depth`, and `obs_history_in`, returning `actions` and `obs_history_out`. The loader keeps/reset the observation history without LSTM hidden/cell state; existing five-input CNN-LSTM exports remain supported.
+
+### Policy router exports
+
+A combined mixed/climb/stairs router uses `single_obs`, `height_map`, `obs_history_in`, `h_in`, and `c_in`. In its `params/deploy.yaml`, use a `height_map` observation group containing `policy_height_map` instead of the single-policy `depth` group. Retain `exported/router.yaml` alongside the model: it defines expert order (`mixed`, `climb`, `stairs`), integer `selected_id`, probabilities, and the four stacked LSTM states `[router, mixed, climb, stairs]` with shape `[4,2,1,256]` for LSTM actors. All-MLP router exports keep `[4,1,1,1]` placeholder h/c inputs/outputs for the same interface; these are not LSTM memory. `OrtRunner` handles their feedback/reset and reads `selected_id` as int64 before exposing it in its float result map. Existing `depth` single-policy exports remain supported. Choose the package through the intended FSM state's `policy_dir`.
+
+Router states automatically publish the current expert on DDS topic `rt/go2/policy_selection` (`std_msgs::msg::dds_::String_`), independently of CSV logging. Names come from `exported/router.yaml` in `expert_order`; the current export maps `0=mixed`, `1=climb`, `2=stairs`. Payload example: `{"active":true,"selected_id":2,"selected_name":"stairs"}`. Leaving the state publishes `{"active":false}`. The matching Go2 MuJoCo viewer displays fresh selections at the top left and hides them after 0.5 seconds without updates. Both programs must use the same DDS domain and network interface.
+
+### Policy logging
+
+Enable logging on the FSM state you run, for example `Velocity_Left`:
+
+```yaml
+logging: true
+logging_dt: 0.02
+logging_options:
+  obs: true
+  action_raw: true
+  robot_state: true
+  commands: true
+  inference_outputs: true
+  lowcmd: true
+  obs_terms: false
+  action_q_des: false
+```
+
+The existing `logging: {enabled: true, dt: 0.02}` format remains supported. The default interval is the policy control period. Recordings start only when the state is entered and are reused on re-entry. Each recording has its own `{policy_dir}/logs/run_data_<timestamp>/` directory with CSV, `.metadata.json`, and `.events.jsonl` files; CSV rows are flushed immediately.
+
+`onnx_inference_ms` measures only `Ort::Session::Run`, excluding observations, input preparation and output copying. `inference_seq` identifies the policy evaluation; faster logging may repeat a result and slower logging may skip results. Observation/action/timing fields come from one policy-thread snapshot. Motor fields use `joint_ids_map` order; foot forces retain SDK foot order. Temperature and LowCmd configuration changes are stored as events. `lowcmd_q` records the published `rt/lowcmd` message, with validity and reception age; missing data is NaN. `action_q_des` optionally records the processed policy target. These options do not enable logging on other FSM states.
+
 ## 📄 License
 
 Project-owned code uses the [MIT license](LICENSE). Apache 2.0 terms for Unitree-derived code are in the [Unitree RL Lab license](docs/licenses/unitree-rl-lab-license.txt).

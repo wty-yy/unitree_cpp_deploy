@@ -152,6 +152,36 @@ https://github.com/user-attachments/assets/d27f4d4b-208e-4212-b829-ad835e53c162
 
 FSM 和按键配置见 [robot_params.md](docs/robot_params.md)，观测分组见 [obs_group.md](docs/obs_group.md)。其他资源：[可视化脚本](deploy/tools/) 和 [Go2 URDF](resources/go2.urdf)。
 
+单策略 CNN-MLP 导出使用 `single_obs`、`depth`、`obs_history_in` 输入，返回 `actions` 和 `obs_history_out`。加载器保留并可重置观测历史，不使用 LSTM 隐藏态或细胞态；原有五输入 CNN-LSTM 导出仍受支持。
+
+### 策略路由导出
+
+合并 mixed/climb/stairs 的 router 使用 `single_obs`、`height_map`、`obs_history_in`、`h_in` 和 `c_in` 输入。配套 `params/deploy.yaml` 中，使用包含 `policy_height_map` 的 `height_map` 观测组替代单策略的 `depth` 组。模型旁保留 `exported/router.yaml`，其中定义专家顺序（`mixed`、`climb`、`stairs`）、整数 `selected_id`、选择概率，以及按 `[router, mixed, climb, stairs]` 堆叠的四组 LSTM 状态，LSTM 模型的形状为 `[4,2,1,256]`；全 MLP router 为统一接口保留 `[4,1,1,1]` 的 h/c 占位输入输出，这些不是 LSTM 记忆。`OrtRunner` 负责状态回传和重置，并按 int64 读取 `selected_id` 后转换到浮点结果表；原有 `depth` 单策略导出仍受支持。通过目标 FSM 状态的 `policy_dir` 选择模型包。
+
+运行 router 状态时，会独立于 CSV 日志，通过 DDS 通道 `rt/go2/policy_selection`（`std_msgs::msg::dds_::String_`）自动发布当前专家。名称按 `exported/router.yaml` 中的 `expert_order` 读取，当前模型为 `0=mixed`、`1=climb`、`2=stairs`。消息示例：`{"active":true,"selected_id":2,"selected_name":"stairs"}`；退出状态时发送 `{"active":false}`。配套 Go2 MuJoCo 在左上角显示新鲜数据，0.5 秒没有更新后隐藏。两个程序需要使用相同的 DDS 域和网络接口。
+
+### 策略日志
+
+在实际运行的 FSM 状态下开启日志，例如 `Velocity_Left`：
+
+```yaml
+logging: true
+logging_dt: 0.02
+logging_options:
+  obs: true
+  action_raw: true
+  robot_state: true
+  commands: true
+  inference_outputs: true
+  lowcmd: true
+  obs_terms: false
+  action_q_des: false
+```
+
+兼容原有 `logging: {enabled: true, dt: 0.02}` 格式。默认采样间隔为策略控制周期，仅在进入该状态后创建日志，再次进入时沿用同一记录。每份记录位于独立的 `{policy_dir}/logs/run_data_<时间戳>/` 目录，包含 CSV、`.metadata.json` 和 `.events.jsonl` 文件；CSV 每行写入后立即刷新。
+
+`onnx_inference_ms` 仅计量 `Ort::Session::Run`，不包含观测计算、输入准备和输出复制。`inference_seq` 标识策略推理次数；日志采样更快时可能重复记录一次推理，更慢时可能跳过部分推理。观测、动作和耗时来自同一策略线程快照。电机字段按 `joint_ids_map` 排序，足端力保持 SDK 足端顺序。温度和 LowCmd 配置仅在变化时写入事件文件。`lowcmd_q` 记录实际发布的 `rt/lowcmd` 消息，同时包含有效性和接收时间差，缺失值为 NaN。`action_q_des` 可额外记录处理后的策略目标。上述设置只作用于所在的 FSM 状态。
+
 ## 📄 许可证
 
 项目自有代码采用 [MIT 许可证](LICENSE)。Unitree 派生代码的 Apache 2.0 条款见 [Unitree RL Lab 许可证](docs/licenses/unitree-rl-lab-license.txt)。
