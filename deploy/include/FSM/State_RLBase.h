@@ -9,6 +9,7 @@
 #include "DataLogger.h"
 #include "utils/filters/joint_vector_filter.h"
 #include "utils/G1LoggingTelemetry.h"
+#include <atomic>
 #include <chrono>
 
 class State_RLBase : public FSMState
@@ -40,6 +41,12 @@ public:
             env->robot->data.joint_pos.data(),
             env->robot->data.joint_pos.data() + env->robot->data.joint_pos.size());
         action_filter_.reset(filtered_action_);
+        entry_inference_seq_ = env->get_policy_logging_snapshot().inference_seq;
+        for (std::size_t i = 0; i < filtered_action_.size(); ++i)
+        {
+            const auto joint_id = static_cast<int>(env->robot->data.joint_ids_map[i]);
+            lowcmd->msg_.motor_cmd()[joint_id].q() = filtered_action_[i];
+        }
         // Start policy thread
         policy_thread_running = true;
         policy_thread = std::thread([this]{
@@ -95,7 +102,8 @@ private:
     std::chrono::steady_clock::time_point start_time;
 
     std::thread policy_thread;
-    bool policy_thread_running = false;
+    std::atomic<bool> policy_thread_running{false};
+    std::uint64_t entry_inference_seq_ = 0;
     joint_filter::JointVectorFilterBank action_filter_;
     std::vector<float> filtered_action_;
 };

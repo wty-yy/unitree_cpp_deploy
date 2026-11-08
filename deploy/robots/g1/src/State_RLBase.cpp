@@ -300,12 +300,17 @@ void State_RLBase::run()
         }
     }
 
-    auto action = env->action_manager->processed_actions();
-    action_filter_.apply(action);
-    filtered_action_ = action;
+    // Keep the measured entry pose until this activation has a complete action.
+    // Read the committed snapshot, never the policy thread's mutable action buffer.
+    auto action = env->get_policy_action_after(entry_inference_seq_);
+    if (!action.empty())
+    {
+        action_filter_.apply(action);
+        filtered_action_ = std::move(action);
+    }
     for (int i = 0; i < env->robot->data.joint_ids_map.size(); ++i)
     {
-        lowcmd->msg_.motor_cmd()[env->robot->data.joint_ids_map[i]].q() = action[i];
+        lowcmd->msg_.motor_cmd()[env->robot->data.joint_ids_map[i]].q() = filtered_action_[i];
     }
 
     if (!enable_logging || !logger)
@@ -326,7 +331,7 @@ void State_RLBase::run()
         !snapshot.observation_terms.empty() ||
         !snapshot.raw_action.empty() ||
         !snapshot.inference_results.empty();
-    if (snapshot.inference_seq == 0 || (snapshot_required && !snapshot_ready))
+    if (snapshot.inference_seq <= entry_inference_seq_ || (snapshot_required && !snapshot_ready))
     {
         return;
     }

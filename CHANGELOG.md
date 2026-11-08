@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## Unreleased
+
+- Hold measured joints until the first complete RL action on every state entry, and hand off immutable action snapshots across policy and control threads
+- Keep FSM entry targets and gains within the complete LowCmd publication lock
+
 ## 20261101 v0.7.1
 
 1. Default `obs_terms` and `action_q_des` to `false` while keeping other RL logging categories enabled

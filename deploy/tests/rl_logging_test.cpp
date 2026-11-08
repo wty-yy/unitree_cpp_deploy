@@ -39,6 +39,17 @@ int main(int argc, char** argv) {
         const auto source = (repository / "deploy/robots/g1" / config["FSM"]["Velocity_X"]["policy_dir"].as<std::string>()).lexically_normal();
         std::filesystem::create_symlink(source / "exported/policy.onnx", policy / "exported/policy.onnx");
         std::filesystem::copy_file(source / "params/deploy.yaml", policy / "params/deploy.yaml");
+        std::size_t observation_size = 0;
+        {
+            Ort::Env model_env(ORT_LOGGING_LEVEL_ERROR, "logging_model_shape");
+            Ort::SessionOptions options;
+            options.SetIntraOpNumThreads(1);
+            Ort::Session model(model_env, (policy / "exported/policy.onnx").c_str(), options);
+            check(model.GetInputCount() == 1, "logging fixture requires a single-input policy");
+            const auto shape = model.GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+            check(shape.size() == 2 && shape[0] == 1 && shape[1] > 0, "invalid policy observation shape");
+            observation_size = static_cast<std::size_t>(shape[1]);
+        }
         config["FSM"]["Velocity_X"]["policy_dir"] = policy.string();
         config["FSM"]["Velocity_X"]["logging"] = true;
         config["FSM"]["Velocity_X"]["logging_dt"] = 0.001;
@@ -54,6 +65,11 @@ int main(int argc, char** argv) {
         FSMState::lowcmd = std::make_unique<LowCmd_t>();
         FSMState::lowstate = std::make_shared<LowState_t>();
         const auto deploy = YAML::LoadFile((policy / "params/deploy.yaml").string());
+        std::size_t observation_terms = 0;
+        for (const auto& term : deploy["observations"]) {
+            const auto name = term.first.as<std::string>();
+            if (name != "use_gym_history" && name != "scale_first") ++observation_terms;
+        }
         const auto default_q = deploy["default_joint_pos"].as<std::vector<float>>();
         {
             std::lock_guard<std::mutex> lock(FSMState::lowstate->mutex_);
@@ -72,6 +88,10 @@ int main(int argc, char** argv) {
                 State_RLBase& state;
                 ~ExitGuard() { state.exit(); }
             } exit_guard{state};
+            for (std::size_t i = 0; i < default_q.size(); ++i) {
+                check(std::abs(FSMState::lowcmd->msg_.motor_cmd()[i].q() - default_q[i]) < 1e-6f,
+                      "state entry did not hold the measured joint position before inference");
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             state.run();
             for (const auto& entry : std::filesystem::recursive_directory_iterator(policy / "logs")) {
@@ -96,7 +116,7 @@ int main(int argc, char** argv) {
             check(std::find(header.begin(), header.end(), "temp_0") == header.end(), "temperature repeated in every row");
             check(std::find(header.begin(), header.end(), "cmd_fixed_0") == header.end(), "disabled fixed commands retained");
             check(std::find(header.begin(), header.end(), "q_des_0") == header.end(), "pending target duplicated alongside LowCmd");
-            column("obs_979");
+            column("obs_" + std::to_string(observation_size - 1));
             const auto inference_ms = std::stod(rows[1][column("onnx_inference_ms")]);
             check(std::isfinite(inference_ms) && inference_ms > 0.0, "ONNX inference time is missing or invalid");
             check(std::stoull(rows[1][column("inference_seq")]) > 0, "inference sequence is missing");
@@ -162,7 +182,18 @@ int main(int argc, char** argv) {
                 previous_inference = sequence;
             }
             state.exit();
+            {
+                std::lock_guard<std::mutex> lock(FSMState::lowstate->mutex_);
+                for (std::size_t i = 0; i < default_q.size(); ++i) {
+                    FSMState::lowstate->msg_.motor_state()[i].q() = default_q[i] + .04f;
+                    FSMState::lowcmd->msg_.motor_cmd()[i].q() = -1.5f;
+                }
+            }
             state.enter();
+            for (std::size_t i = 0; i < default_q.size(); ++i) {
+                check(std::abs(FSMState::lowcmd->msg_.motor_cmd()[i].q() - default_q[i] - .04f) < 1e-6f,
+                      "state re-entry retained an old target instead of holding current joints");
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             state.run();
             check(read_csv(csv_path).size() > rows.size(), "re-entering model did not append to its existing log");
@@ -184,7 +215,7 @@ int main(int argc, char** argv) {
         check(metadata["format_version"] == 2, "metadata format missing");
         check(metadata.contains("onnx_inference_ms"), "inference timing scope missing from metadata");
         check(metadata.contains("inference_seq"), "inference sequence description missing from metadata");
-        check(metadata["observation_terms"].size() == 7, "observation layout missing");
+        check(metadata["observation_terms"].size() == observation_terms, "observation layout missing");
         auto events_path = csv_path;
         events_path.replace_extension(".events.jsonl");
         std::ifstream events_file(events_path);

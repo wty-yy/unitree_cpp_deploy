@@ -162,6 +162,13 @@ public:
         return last_policy_snapshot_;
     }
 
+    std::vector<float> get_policy_action_after(std::uint64_t inference_seq) const
+    {
+        std::lock_guard<std::mutex> lock(policy_snapshot_mutex_);
+        if (last_policy_snapshot_.inference_seq <= inference_seq) return {};
+        return last_policy_snapshot_.processed_action;
+    }
+
     bool boost_active() const
     {
         return !(fixed_command_enabled && fixed_command_active) && velocity_command_boost_.active();

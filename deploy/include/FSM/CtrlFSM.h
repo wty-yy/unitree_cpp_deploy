@@ -118,13 +118,13 @@ private:
 
     void run_()
     {
+        if (!FSMState::lowcmd->trylock()) return;
         currentState->pre_run();
         apply_external_joystick_();
         FSMState::update_effective_joystick();
         update_external_velocity_();
         currentState->run();
         update_overlay_();
-        currentState->post_run();
         
         // Check if need to change state
         int nextStateMode = 0;
@@ -167,6 +167,7 @@ private:
                 warn_disabled_state_(nextStateMode);
                 robot_automation::ExternalVelocity::instance().report_state_result(
                     false, "FSM state is disabled: " + std::to_string(nextStateMode));
+                currentState->post_run();
                 return;
             }
 
@@ -196,6 +197,7 @@ private:
             robot_automation::ExternalVelocity::instance().report_state_result(
                 true, "Already in " + requested_state);
         }
+        currentState->post_run();
     }
 
     void apply_external_joystick_()
