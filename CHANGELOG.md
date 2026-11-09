@@ -7,3 +7,4 @@
 3. Accept shifted height-map origins and require matching timestamps, widths, and origins for elevation and missing-mask pairing
 4. Add standalone CMake bridge tests for Go2 four-direction bindings and read-only catalog queries
 5. Set `Velocity_Down` to `skill_moe/mixed_climb_5k`, set `Velocity_Left` to `skill_moe/mixed_stairs_5k`, and disable `Velocity_Right`
+6. Handle `policy_dir: null` in policy catalog queries across `yaml-cpp` versions

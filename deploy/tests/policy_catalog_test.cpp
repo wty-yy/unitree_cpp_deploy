@@ -20,7 +20,8 @@ int main(int argc, char** argv) {
             const auto name = state["name"].get<std::string>();
             if (!policies.contains(name)) continue;
             assert(state["policy_name"] == "resolved-run");
-            assert(state["configured_policy_dir"] == fsm[name]["policy_dir"].as<std::string>());
+            const auto configured = fsm[name]["policy_dir"];
+            assert(state["configured_policy_dir"] == (configured && !configured.IsNull() ? configured.as<std::string>() : ""));
             assert(state["policy_dir"] == policies[name]);
             assert(state["enabled"] == true);
             bool from_stand = false;
@@ -34,7 +35,7 @@ int main(int argc, char** argv) {
         return 0;
     }
     auto cfg = YAML::Load(R"(
-_: {Passive: {id: 1}, Walk: {id: 2, type: RLBase}, Missing: {id: 3}}
+_: {Passive: {id: 1}, Walk: {id: 2, type: RLBase}, Missing: {id: 3}, Disabled: {id: 4}}
 Passive:
   transitions: {Walk: 'RB + X.on_pressed', NotRegistered: 'RT + X.on_pressed'}
 Walk:
@@ -42,17 +43,21 @@ Walk:
   transitions: {Passive: 'LT + B.on_pressed', Missing: 'RB + Y.on_pressed'}
 Missing:
   policy_dir: /models/missing
+Disabled:
+  policy_dir: null
 )");
     auto catalog = make_policy_catalog(cfg, {{"Walk", "/models/parent/actual-run"}},
         {{"Missing", "model.onnx not found"}},
         {{{"target", "Walk"}, {"expression", "RT + A.on_pressed"}}});
-    assert(catalog["states"].size() == 3);
+    assert(catalog["states"].size() == 4);
     assert(catalog["states"][0]["transitions"].size() == 1);
     assert(catalog["states"][1]["policy_name"] == "actual-run");
     assert(catalog["states"][1]["configured_policy_dir"] == "/models/parent");
     assert(catalog["states"][2]["enabled"] == false);
     assert(catalog["states"][2]["reason"] == "model.onnx not found");
     assert(catalog["states"][2]["policy_dir"] == "");
+    assert(catalog["states"][3]["configured_policy_dir"] == "");
+    assert(catalog["states"][3]["policy_dir"] == "");
     assert(catalog["overlays"].size() == 1);
     auto& bridge = ExternalVelocity::instance();
     assert(bridge.handle({{"type", "policy_catalog"}})["ok"] == false);

@@ -33,7 +33,7 @@ inline nlohmann::json make_policy_catalog(
             {"type", entry.second["type"] ? entry.second["type"].as<std::string>() : name},
             {"enabled", reason == disabled.end()},
             {"reason", reason == disabled.end() ? "" : reason->second},
-            {"configured_policy_dir", state && state["policy_dir"] ? state["policy_dir"].as<std::string>() : ""},
+            {"configured_policy_dir", state && state["policy_dir"] && !state["policy_dir"].IsNull() ? state["policy_dir"].as<std::string>() : ""},
             {"policy_dir", path}, {"policy_name", std::filesystem::path(path).filename().string()},
             {"transitions", transitions}});
     }
