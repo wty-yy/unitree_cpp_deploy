@@ -175,6 +175,32 @@ public:
         return true;
     }
 
+    void record_policy(const std::string& state, const std::string& directory) {
+        std::lock_guard<std::mutex> guard(mutex_);
+        policy_directories_[state] = directory;
+    }
+
+    void record_overlay(const Json& overlay) {
+        std::lock_guard<std::mutex> guard(mutex_);
+        policy_overlays_.push_back(overlay);
+    }
+
+    Json policy_directories() {
+        std::lock_guard<std::mutex> guard(mutex_);
+        return policy_directories_;
+    }
+
+    Json policy_overlays() {
+        std::lock_guard<std::mutex> guard(mutex_);
+        return policy_overlays_;
+    }
+
+    void set_policy_catalog(Json catalog) {
+        std::lock_guard<std::mutex> guard(mutex_);
+        catalog["id"] = std::to_string(getpid()) + ":" + std::to_string(now());
+        policy_catalog_ = std::move(catalog);
+    }
+
     Json handle(const Json& request) {
         std::lock_guard<std::mutex> guard(mutex_);
         Json response = handle_locked(request);
@@ -190,6 +216,8 @@ private:
     Json handle_locked(const Json& request) {
         try {
             const std::string type = request.at("type").get<std::string>();
+            if (type == "policy_catalog")
+                return {{"ok", !policy_catalog_.empty()}, {"policy_catalog", policy_catalog_}};
             if (type == "status") return status(true, "");
             if (type == "disarm") {
                 clear("External control released");
@@ -335,6 +363,7 @@ private:
                 {"manual_override", manual_}, {"armed", armed_},
                 {"remote_active", active}, {"ready_to_arm", ready()},
                 {"generation", generation_}, {"reason", reason_},
+                {"policy_catalog_id", policy_catalog_.value("id", std::string{})},
                 {"requested_state", state_request_pending_ ? requested_state_ : ""},
                 {"state_request_ok", state_request_ok_},
                 {"state_request_message", state_request_message_},
@@ -365,6 +394,9 @@ private:
         }
     }
 
+    Json policy_directories_ = Json::object();
+    Json policy_overlays_ = Json::array();
+    Json policy_catalog_ = Json::object();
     std::mutex mutex_;
     std::string state_ = "Initializing", owner_, reason_ = "Not armed", path_;
     std::string requested_state_, state_request_message_;

@@ -64,7 +64,12 @@ public:
         for (const auto& name : input_names_strings) {
             input_names.push_back(name.c_str());
         }
-        for (const auto& shape : input_shapes) {
+        const bool is_skill_moe = input_names_strings.size() == 2 &&
+            std::find(input_names_strings.begin(), input_names_strings.end(), "history") != input_names_strings.end() &&
+            std::find(input_names_strings.begin(), input_names_strings.end(), "height_map") != input_names_strings.end();
+        // Native Skill-MoE exports allow a symbolic batch; deployment runs one robot.
+        for (auto& shape : input_shapes) {
+            if (is_skill_moe && !shape.empty() && shape[0] == -1) shape[0] = 1;
             size_t size = 1;
             for (const auto& dim : shape) {
                 if (dim <= 0) throw std::runtime_error("Deployment requires fixed positive ONNX dimensions.");
@@ -76,9 +81,11 @@ public:
         if (image_input == input_names_strings.end())
             image_input = std::find(input_names_strings.begin(), input_names_strings.end(), "height_map");
         if (image_input != input_names_strings.end()) {
-            const bool is_router = *image_input == "height_map";
+            const bool is_router = *image_input == "height_map" && !is_skill_moe;
             const auto channels = session->GetModelMetadata().LookupCustomMetadataMapAllocated("image_channel_names", allocator);
-            if (!channels || std::string(channels.get()) != "relative_elevation,missing_mask")
+            // Native Skill-MoE exports describe channel semantics in config.yaml.
+            if ((!channels && !is_skill_moe) ||
+                (channels && std::string(channels.get()) != "relative_elevation,missing_mask"))
                 throw std::runtime_error("Height-map policy requires relative_elevation,missing_mask metadata.");
             const auto& image_shape = input_shapes[std::distance(input_names_strings.begin(), image_input)];
             if (image_shape != std::vector<int64_t>{1, 2, 17, 11} && image_shape != std::vector<int64_t>{1, 2, 9, 11})
@@ -96,6 +103,7 @@ public:
             std::map<std::string, std::vector<int64_t>> expected{
                 {"single_obs", {1, 45}}, {*image_input, image_shape}, {"obs_history_in", {1, 450}}
             };
+            if (is_skill_moe) expected = {{"history", {1, 450}}, {"height_map", image_shape}};
             // MLP fusion retains observation history without LSTM hidden/cell inputs.
             if (is_router || std::find(input_names_strings.begin(), input_names_strings.end(), "h_in") != input_names_strings.end() ||
                 std::find(input_names_strings.begin(), input_names_strings.end(), "c_in") != input_names_strings.end()) {
@@ -123,6 +131,22 @@ public:
         
         for(size_t i = 0; i < num_outputs; i++) {
             output_names.push_back(output_names_strings[i].c_str());
+        }
+
+        if (is_skill_moe) {
+            if (output_names_strings != std::vector<std::string>{"actions"})
+                throw std::runtime_error("Skill-MoE requires only the actions output.");
+            const auto type = session->GetOutputTypeInfo(0);
+            const auto tensor = type.GetTensorTypeAndShapeInfo();
+            const auto shape = tensor.GetShape();
+            if (tensor.GetElementType() != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT || shape.size() != 2 ||
+                (shape[0] != 1 && shape[0] != -1) || shape[1] != 12)
+                throw std::runtime_error("Skill-MoE actions must have shape [batch,12] and float type.");
+            for (size_t i = 0; i < num_inputs; ++i) {
+                const auto input_type = session->GetInputTypeInfo(i);
+                if (input_type.GetTensorTypeAndShapeInfo().GetElementType() != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT)
+                    throw std::runtime_error("Skill-MoE inputs must have float type.");
+            }
         }
 
         // Find "actions" output shape for compatibility

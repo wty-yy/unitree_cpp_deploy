@@ -60,8 +60,10 @@ private:
         const double now = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
         if (!std::isfinite(message.stamp()) || now - message.stamp() < -0.1 || now - message.stamp() > timeout_) return;
         const int source_width = message.width();
-        const bool full_map = source_width == 17 && std::abs(message.origin()[0] + 0.8f) <= 1e-5f;
-        const bool forward_map = source_width == 9 && std::abs(message.origin()[0]) <= 1e-5f;
+        const bool full_map = source_width == 17 && (std::abs(message.origin()[0] + 0.8f) <= 1e-5f ||
+            std::abs(message.origin()[0] + 0.3f) <= 1e-5f);
+        const bool forward_map = source_width == 9 && (std::abs(message.origin()[0]) <= 1e-5f ||
+            std::abs(message.origin()[0] - 0.5f) <= 1e-5f);
         if (message.frame_id() != "base_yaw_relative" || !(full_map || (width_ == 9 && forward_map)) || message.height() != 11 ||
             std::abs(message.resolution() - 0.1f) > 1e-5f ||
             std::abs(message.origin()[1] + 0.5f) > 1e-5f ||
@@ -73,7 +75,8 @@ private:
         auto& pending = missing ? missing_ : elevation_;
         if (message.stamp() <= stamp_ || message.stamp() < pending.stamp()) return;
         pending = message;
-        if (elevation_.stamp() != missing_.stamp() || elevation_.width() != missing_.width()) return;
+        if (elevation_.stamp() != missing_.stamp() || elevation_.width() != missing_.width() ||
+            elevation_.origin() != missing_.origin()) return;
         image_.resize(2 * cells_);
         const int offset = source_width - width_;
         for (int x = 0; x < width_; ++x) for (int y = 0; y < 11; ++y) {

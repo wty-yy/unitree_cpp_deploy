@@ -7,6 +7,7 @@
 #include "BaseState.h"
 #include "FSM/FSMState.h"
 #include "utils/ExternalVelocity.h"
+#include "utils/PolicyCatalog.h"
 #include <spdlog/spdlog.h>
 #include <yaml-cpp/yaml.h>
 #include <array>
@@ -48,6 +49,8 @@ public:
             auto state_instance = fsm_class->second(id, fsm_name);
             add(state_instance);
         }
+        auto& bridge = robot_automation::ExternalVelocity::instance();
+        bridge.set_policy_catalog(robot_automation::make_policy_catalog(cfg, bridge.policy_directories()));
     }
 
     void start() 

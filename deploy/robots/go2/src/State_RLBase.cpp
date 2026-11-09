@@ -1,3 +1,4 @@
+#include "utils/ExternalVelocity.h"
 #include "FSM/State_RLBase.h"
 #include "UdpSocket.h"
 #include "unitree_articulation.h"
@@ -76,6 +77,8 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
     }
 
     auto policy_dir = param::parser_policy_dir(cfg["policy_dir"].as<std::string>());
+    robot_automation::ExternalVelocity::instance().record_policy(
+        getStateString(), policy_dir.lexically_normal().string());
 
     env = std::make_unique<isaaclab::ManagerBasedRLEnv>(
         YAML::LoadFile(policy_dir / "params" / "deploy.yaml"),
