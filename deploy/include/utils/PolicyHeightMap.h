@@ -19,8 +19,11 @@ namespace utils {
 class PolicyHeightMap {
     using Message = unitree_go::msg::dds_::HeightMap_;
 public:
-    explicit PolicyHeightMap(bool forward_elevation = false)
-        : width_(forward_elevation ? 9 : 17), cells_(width_ * 11) {}
+    explicit PolicyHeightMap(bool forward_elevation = false, float offset_x = 0.0f)
+        : width_(forward_elevation ? 9 : 17), cells_(width_ * 11), offset_x_(offset_x)
+    {
+        if (!std::isfinite(offset_x_)) throw std::invalid_argument("Height-map offset must be finite.");
+    }
 
     void start(const std::string& topic = "rt/g1/policy_height_map", double timeout = 0.5)
     {
@@ -60,8 +63,8 @@ private:
         const double now = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
         if (!std::isfinite(message.stamp()) || now - message.stamp() < -0.1 || now - message.stamp() > timeout_) return;
         const int source_width = message.width();
-        const bool full_map = source_width == 17 && std::abs(message.origin()[0] + 0.8f) <= 1e-5f;
-        const bool forward_map = source_width == 9 && std::abs(message.origin()[0]) <= 1e-5f;
+        const bool full_map = source_width == 17 && std::abs(message.origin()[0] + 0.8f - offset_x_) <= 1e-5f;
+        const bool forward_map = source_width == 9 && std::abs(message.origin()[0] - offset_x_) <= 1e-5f;
         if (message.frame_id() != "base_yaw_relative" || !(full_map || (width_ == 9 && forward_map)) || message.height() != 11 ||
             !std::isfinite(message.resolution()) || std::abs(message.resolution() - 0.1f) > 1e-5f ||
             !std::isfinite(message.origin()[1]) ||
@@ -94,5 +97,6 @@ private:
     double stamp_ = 0, timeout_ = 0.5;
     std::chrono::steady_clock::time_point received_;
     const int width_, cells_;
+    const float offset_x_;
 };
 }

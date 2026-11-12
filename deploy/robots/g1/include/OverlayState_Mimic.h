@@ -2,6 +2,7 @@
 
 #include "FSM/FSMOverlayState.h"
 #include "FSM/FSMState.h"
+#include "utils/ExternalVelocity.h"
 #include "utils/motion_selection.h"
 #include "utils/path_file_manager.h"
 #include <filesystem>
@@ -50,6 +51,11 @@ public:
         select_prev_trigger_ = compile(key_cfg_.select_prev);
         confirm_trigger_ = compile(key_cfg_.confirm);
         cancel_trigger_ = compile(key_cfg_.cancel);
+        robot_automation::ExternalVelocity::instance().record_overlay({
+            {"target", target_state_name_}, {"expression", key_cfg_.open},
+            {"controls", {{"next", key_cfg_.select_next}, {"previous", key_cfg_.select_prev},
+                          {"confirm", key_cfg_.confirm}, {"cancel", key_cfg_.cancel}}}});
+
     }
 
     std::string name() const override

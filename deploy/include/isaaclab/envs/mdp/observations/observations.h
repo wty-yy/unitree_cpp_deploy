@@ -25,6 +25,12 @@ REGISTER_OBSERVATION(projected_gravity)
     return std::vector<float>(data.data(), data.data() + data.size());
 }
 
+REGISTER_OBSERVATION(height_map)
+{
+    if (!env->height_map) throw std::runtime_error("Height-map observation requires height_map config");
+    return env->height_map_image;
+}
+
 REGISTER_OBSERVATION(joint_pos)
 {
     auto & asset = env->robot;

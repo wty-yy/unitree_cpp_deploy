@@ -8,6 +8,7 @@
 #include "FSM/FSMOverlayState.h"
 #include "FSM/FSMState.h"
 #include "utils/ExternalVelocity.h"
+#include "utils/PolicyCatalog.h"
 #include "unitree_joystick_dsl.hpp"
 #include <array>
 #include <functional>
@@ -68,6 +69,13 @@ public:
         }
 
         register_overlays_();
+        std::map<std::string, std::string> disabled;
+        for (const auto& entry : disabled_states_)
+            disabled[FSMStringMap.left.at(entry.first)] = entry.second;
+        auto& bridge = robot_automation::ExternalVelocity::instance();
+        bridge.set_policy_catalog(robot_automation::make_policy_catalog(
+            cfg, bridge.policy_directories(), disabled, bridge.policy_overlays()));
+
 
         if (states.empty())
         {

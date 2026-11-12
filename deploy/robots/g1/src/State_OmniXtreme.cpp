@@ -1,3 +1,4 @@
+#include "utils/ExternalVelocity.h"
 #include "State_OmniXtreme.h"
 
 #include "cnpy.h"
@@ -317,6 +318,8 @@ void State_OmniXtreme::load_policy_and_env(const YAML::Node& cfg)
     }
 
     policy_dir_ = param::parser_policy_dir(cfg["policy_dir"].as<std::string>());
+    robot_automation::ExternalVelocity::instance().record_policy(
+        getStateString(), policy_dir_.lexically_normal().string());
     const auto deploy_rel = cfg["deploy_yaml"] ? cfg["deploy_yaml"].as<std::string>() : "params/deploy.yaml";
     const auto base_model_rel = cfg["base_model"] ? cfg["base_model"].as<std::string>() : "exported/base_policy_trt.onnx";
     const auto residual_model_rel = cfg["residual_model"] ? cfg["residual_model"].as<std::string>() : "exported/residual_policy.onnx";

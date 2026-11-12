@@ -1,9 +1,13 @@
 # CHANGELOG
 
-## Unreleased
+## 20261112 v0.7.2
 
-- Hold measured joints until the first complete RL action on every state entry, and hand off immutable action snapshots across policy and control threads
-- Keep FSM entry targets and gains within the complete LowCmd publication lock
+1. Expose FSM bindings, resolved policy directories, disabled states, and motion-overlay keys through the read-only `policy_catalog` interface
+2. Hold measured joints until the first complete RL action on state entry and hand off immutable action snapshots across policy and control threads
+3. Keep FSM entry targets and gains within the complete `LowCmd` publication lock
+4. Add `height_map` observations and configurable `height_map.offset_x` origin validation
+5. Resolve symbolic ONNX batch dimensions to `1` and reject other unsupported dynamic dimensions
+6. Join the keyboard input thread on destruction for clean process exit
 
 ## 20261101 v0.7.1
 

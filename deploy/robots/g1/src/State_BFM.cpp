@@ -1,3 +1,4 @@
+#include "utils/ExternalVelocity.h"
 #include "State_BFM.h"
 
 #include "cnpy.h"
@@ -230,6 +231,8 @@ void State_BFM::load_policy_and_env(const YAML::Node& cfg)
     }
 
     const auto policy_dir = param::parser_policy_dir(cfg["policy_dir"].as<std::string>());
+    robot_automation::ExternalVelocity::instance().record_policy(
+        getStateString(), policy_dir.lexically_normal().string());
     const auto deploy_rel = cfg["deploy_yaml"] ? cfg["deploy_yaml"].as<std::string>() : "param/deploy.yaml";
     const auto onnx_rel = cfg["onnx_model"] ? cfg["onnx_model"].as<std::string>() : "exported/FBcprAuxModel.onnx";
 

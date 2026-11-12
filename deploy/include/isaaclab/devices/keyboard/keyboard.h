@@ -36,6 +36,10 @@ public:
   {
     _thread_running = false;
     _pauseKey();
+    if (_readThread.joinable())
+    {
+      _readThread.join();
+    }
   }
 
   void update()

@@ -80,7 +80,7 @@ public:
 
         if (cfg["height_map"]) {
             const auto map = cfg["height_map"];
-            height_map = std::make_unique<utils::PolicyHeightMap>();
+            height_map = std::make_unique<utils::PolicyHeightMap>(false, map["offset_x"].as<float>(0.0f));
             height_map->start(map["topic"].as<std::string>(), map["timeout_s"].as<double>(0.5));
             height_map_ready = height_map->sample(height_map_image);
         }

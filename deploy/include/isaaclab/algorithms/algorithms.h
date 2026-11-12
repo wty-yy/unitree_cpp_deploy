@@ -53,6 +53,12 @@ public:
         for (size_t i = 0; i < num_inputs; ++i) {
             Ort::TypeInfo input_type = session->GetInputTypeInfo(i);
             input_shapes.push_back(input_type.GetTensorTypeAndShapeInfo().GetShape());
+            // Exported actors can declare a symbolic batch; deployment runs one robot.
+            auto& shape = input_shapes.back();
+            if (!shape.empty() && shape[0] == -1) shape[0] = 1;
+            for (const auto dim : shape) {
+                if (dim <= 0) throw std::runtime_error("Unsupported dynamic ONNX input dimension");
+            }
             auto input_name = session->GetInputNameAllocated(i, allocator);
             input_names_strings.push_back(input_name.get());
         }

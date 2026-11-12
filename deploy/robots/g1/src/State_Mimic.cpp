@@ -1,3 +1,4 @@
+#include "utils/ExternalVelocity.h"
 #include "State_Mimic.h"
 #include "unitree_articulation.h"
 #include "isaaclab/envs/mdp/commands/motion_command.h"
@@ -160,6 +161,8 @@ State_Mimic::State_Mimic(int state_mode, std::string state_string)
 {
     auto cfg = param::config["FSM"][getStateString()];
     auto policy_dir = param::parser_policy_dir(cfg["policy_dir"].as<std::string>());
+    robot_automation::ExternalVelocity::instance().record_policy(
+        getStateString(), policy_dir.lexically_normal().string());
     const auto deploy_rel = cfg["deploy_yaml"] ? cfg["deploy_yaml"].as<std::string>() : "params/deploy.yaml";
     const auto onnx_rel = cfg["onnx_model"] ? cfg["onnx_model"].as<std::string>() : "exported/policy.onnx";
 
