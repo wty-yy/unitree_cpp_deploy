@@ -37,7 +37,8 @@ enum class OnnxExecProvider
     CPU
 };
 
-OnnxExecProvider append_best_provider(Ort::SessionOptions& options, int device_id, bool enable_tensorrt, bool enable_cuda)
+OnnxExecProvider append_best_provider(Ort::SessionOptions& options, int device_id, bool enable_tensorrt, bool enable_cuda,
+                                     const std::string& cache_path)
 {
     const OrtApi& api = Ort::GetApi();
 
@@ -76,6 +77,12 @@ OnnxExecProvider append_best_provider(Ort::SessionOptions& options, int device_i
     {
         OrtTensorRTProviderOptions trt_options{};
         trt_options.device_id = device_id;
+        trt_options.trt_max_partition_iterations = 1000;
+        trt_options.trt_min_subgraph_size = 1;
+        trt_options.trt_max_workspace_size = 1ULL << 30;
+        std::filesystem::create_directories(cache_path);
+        trt_options.trt_engine_cache_enable = 1;
+        trt_options.trt_engine_cache_path = cache_path.c_str();
         status = api.SessionOptionsAppendExecutionProvider_TensorRT(options, &trt_options);
         if (status == nullptr)
         {
@@ -256,12 +263,18 @@ void State_BFM::load_policy_and_env(const YAML::Node& cfg)
 
     session_options_.SetGraphOptimizationLevel(ORT_ENABLE_EXTENDED);
     const OnnxExecProvider selected_provider =
-        append_best_provider(session_options_, cuda_device_id, prefer_tensorrt, prefer_cuda);
+        append_best_provider(session_options_, cuda_device_id, prefer_tensorrt, prefer_cuda,
+                             (onnx_path.parent_path() / "trt_cache").string());
 
     session_ = std::make_unique<Ort::Session>(ort_env_, onnx_path.string().c_str(), session_options_);
 
     auto input_name = session_->GetInputNameAllocated(0, allocator_);
     onnx_input_name_ = input_name.get();
+    onnx_input_size_ = 1;
+    for (const auto dim : session_->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape())
+    {
+        onnx_input_size_ *= static_cast<std::size_t>(std::max<int64_t>(dim, 1));
+    }
 
     output_names_str_.clear();
     output_names_.clear();
@@ -301,6 +314,26 @@ void State_BFM::load_policy_and_env(const YAML::Node& cfg)
     {
         spdlog::warn("State_BFM: TensorRT/CUDA provider not available, fallback to CPU");
     }
+}
+
+void State_BFM::warmup()
+{
+    if (!session_ || onnx_input_size_ == 0)
+    {
+        return;
+    }
+    const auto cfg = param::config["FSM"][getStateString()];
+    if (!cfg["onnx_warmup"].as<bool>(true))
+    {
+        spdlog::info("State_{}: ONNX warmup disabled by config", getStateString());
+        return;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    const std::vector<float> zeros(onnx_input_size_, 0.0f);
+    for (int i = 0; i < 2; ++i) infer_action(zeros);
+    spdlog::info("State_BFM: ONNX warmup total_ms={:.1f}",
+                 std::chrono::duration<double, std::milli>(
+                     std::chrono::steady_clock::now() - start).count());
 }
 
 void State_BFM::initialize_limits(const YAML::Node& cfg)
@@ -587,21 +620,11 @@ void State_BFM::enter()
         lowcmd->msg_.motor_cmd()[i].tau() = 0.0f;
     }
 
-    env_->robot->update();
-    const std::size_t dof = env_->robot->data.joint_ids_map.size();
-    latest_q_target_.assign(dof, 0.0f);
-    for (std::size_t i = 0; i < dof; ++i)
+    // A deferred switch already ran this policy's frames; keep its state.
+    if (!prewarmed_.exchange(false))
     {
-        latest_q_target_[i] = env_->robot->data.joint_pos[i];
+        init_policy_state();
     }
-    reset_q_target_filter(latest_q_target_);
-
-    use_policy_action_ = true;
-    start_motion_ = false;
-    total_steps_ = 0;
-    last_action_.assign(dof, 0.0f);
-    t_ = t_stop_;
-    z_index_ = 0;
 
     enter_time_ = std::chrono::steady_clock::now();
 
@@ -616,32 +639,9 @@ void State_BFM::enter()
 
         while (policy_thread_running_)
         {
-            env_->robot->update();
-
-            auto input = build_policy_input();
-            const auto infer_t0 = clock::now();
-            auto action = infer_action(input);
-            const auto infer_t1 = clock::now();
-            infer_time_ms_sum += std::chrono::duration<double, std::milli>(infer_t1 - infer_t0).count();
+            infer_time_ms_sum += policy_step();
             ++infer_time_count;
 
-            for (auto& a : action)
-            {
-                a = std::clamp(a, -1.0f, 1.0f) * action_rescale_;
-            }
-            last_action_ = action;
-
-            auto q_target = compute_q_target(action);
-            q_target = clamp_vec(q_target, joint_pos_lower_limit_, joint_pos_upper_limit_);
-            apply_q_target_filter(q_target);
-            q_target = clamp_vec(q_target, joint_pos_lower_limit_, joint_pos_upper_limit_);
-
-            {
-                std::lock_guard<std::mutex> lock(target_mtx_);
-                latest_q_target_ = std::move(q_target);
-            }
-
-            ++total_steps_;
             if (verbose_runtime_log_ && total_steps_ % 200 == 0)
             {
                 const double avg_infer_ms = (infer_time_count > 0) ? (infer_time_ms_sum / static_cast<double>(infer_time_count)) : 0.0;
@@ -658,6 +658,99 @@ void State_BFM::enter()
             sleep_till += dt;
         }
     });
+}
+
+void State_BFM::init_policy_state()
+{
+    env_->robot->update();
+    const std::size_t dof = env_->robot->data.joint_ids_map.size();
+    std::vector<float> q_target(dof, 0.0f);
+    for (std::size_t i = 0; i < dof; ++i)
+    {
+        q_target[i] = env_->robot->data.joint_pos[i];
+    }
+    {
+        std::lock_guard<std::mutex> lock(target_mtx_);
+        latest_q_target_ = q_target;
+    }
+    reset_q_target_filter(q_target);
+
+    use_policy_action_ = true;
+    start_motion_ = false;
+    total_steps_ = 0;
+    last_action_.assign(dof, 0.0f);
+    t_ = t_stop_;
+    z_index_ = 0;
+}
+
+double State_BFM::policy_step()
+{
+    env_->robot->update();
+
+    auto input = build_policy_input();
+    const auto infer_t0 = std::chrono::high_resolution_clock::now();
+    auto action = infer_action(input);
+    const auto infer_t1 = std::chrono::high_resolution_clock::now();
+
+    for (auto& a : action)
+    {
+        a = std::clamp(a, -1.0f, 1.0f) * action_rescale_;
+    }
+    last_action_ = action;
+
+    auto q_target = compute_q_target(action);
+    q_target = clamp_vec(q_target, joint_pos_lower_limit_, joint_pos_upper_limit_);
+    apply_q_target_filter(q_target);
+    q_target = clamp_vec(q_target, joint_pos_lower_limit_, joint_pos_upper_limit_);
+
+    {
+        std::lock_guard<std::mutex> lock(target_mtx_);
+        latest_q_target_ = std::move(q_target);
+    }
+
+    ++total_steps_;
+    return std::chrono::duration<double, std::milli>(infer_t1 - infer_t0).count();
+}
+
+bool State_BFM::start_policy_prewarm(int frames)
+{
+    if (!env_ || frames <= 0 || prewarm_started_.exchange(true))
+    {
+        return false;
+    }
+    prewarm_done_ = false;
+    prewarm_thread_ = std::thread([this, frames] {
+        using clock = std::chrono::steady_clock;
+        try
+        {
+            init_policy_state();
+            const auto dt = std::chrono::duration_cast<clock::duration>(
+                std::chrono::duration<double>(env_->step_dt));
+            auto next = clock::now() + dt;
+            for (int i = 0; i < frames; ++i)
+            {
+                policy_step();
+                std::this_thread::sleep_until(next);
+                next += dt;
+            }
+            prewarmed_ = true;
+        }
+        catch (const std::exception& error)
+        {
+            spdlog::error("State_BFM: policy prewarm failed: {}", error.what());
+        }
+        prewarm_done_ = true;
+    });
+    return true;
+}
+
+void State_BFM::finish_policy_prewarm()
+{
+    if (prewarm_thread_.joinable())
+    {
+        prewarm_thread_.join();
+    }
+    prewarm_started_ = false;
 }
 
 void State_BFM::run()
@@ -684,6 +777,10 @@ void State_BFM::exit()
     if (policy_thread_.joinable())
     {
         policy_thread_.join();
+    }
+    if (prewarm_thread_.joinable())
+    {
+        prewarm_thread_.join();
     }
 }
 

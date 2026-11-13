@@ -139,6 +139,19 @@ Velocity_Y:
 - `exported/policy.onnx`
 - `params/deploy.yaml`
 
+### 策略预编译
+
+TensorRT 在首次推理时才编译动态 shape 引擎，否则会卡住第一次切换到该策略。`g1_ctrl` 现在会在启动时、
+打印 `Press [L2 + Up]` 之前预编译所有已启用策略，因此切换状态不再等待编译。某个状态设置
+`onnx_warmup: false` 可以跳过它的预热。
+
+切换到 `Velocity_*` 或 `BFM_goal` 时默认是延迟接管：目标策略先在后台跑
+`FSM.switch_prewarm_frames`（默认 5）个控制帧，期间由原状态继续控制机器人，跑完后再交接。
+设为 `0` 则立即切换。
+
+引擎缓存保存在 `<policy_dir>/exported/trt_cache`：新模型第一次启动会编译引擎（较慢），之后启动直接加载。
+缓存与 GPU、TensorRT 版本绑定，必须在目标机器上生成。
+
 ### BFM-Zero 配置
 
 在 `FSM.BFM_goal / FSM.BFM_reward / FSM.BFM_tracking` 中可配置：
@@ -146,7 +159,8 @@ Velocity_Y:
 - `policy_dir`: BFM 模型目录
 - `deploy_yaml`: 部署参数路径，默认 `param/deploy.yaml`
 - `onnx_model`: ONNX 模型路径，默认 `exported/FBcprAuxModel.onnx`
-- `onnx_cuda` / `onnx_tensorrt` / `onnx_cuda_device`: ONNX Runtime 后端设置
+- `onnx_tensorrt` / `onnx_cuda` / `onnx_cuda_device`: ONNX Runtime 后端设置；`onnx_cuda` 默认跟随 `onnx_tensorrt`，只有关掉 TensorRT 单独用 CUDA 时才需要写
+- `onnx_warmup`: 启动时预编译该策略，默认 `true`
 - `task_type`: `goal` / `reward` / `tracking`
 - `latent_file`: 对应任务的 `.npz` 潜变量文件
 - `gamepad_map`: 可覆盖 `start_motion`、`next_latent`、`reset_state`
@@ -177,7 +191,7 @@ BFM 的 `deploy.yaml` 观测建议使用双组结构：
 - `residual_model`
 - `fk_model`
 - `motion_files`
-- `onnx_cuda` / `onnx_tensorrt` / `onnx_cuda_device`
+- `onnx_tensorrt` / `onnx_cuda` / `onnx_cuda_device`（`onnx_cuda` 默认跟随 `onnx_tensorrt`）
 - `residual_scale`
 - `loop_trajectory`
 - `root_body_index`

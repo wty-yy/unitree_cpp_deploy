@@ -29,6 +29,10 @@ public:
 
     void enter();
     void run();
+    void warmup() override;
+    bool start_policy_prewarm(int frames) override;
+    bool policy_prewarm_done() const override { return prewarm_done_.load(); }
+    void finish_policy_prewarm() override;
     void exit();
 
 private:
@@ -64,6 +68,11 @@ private:
     std::vector<float> compute_q_target(const std::vector<float>& scaled_action);
     void handle_gamepad_events();
 
+    // One policy iteration without lowcmd access; shared by the control thread
+    // and the deferred-switch prewarm. Returns the inference time in ms.
+    void init_policy_state();
+    double policy_step();
+
     static std::vector<float> to_float_vector(const cnpy::NpyArray& array);
 
 private:
@@ -75,12 +84,17 @@ private:
     std::unique_ptr<Ort::Session> session_;
     Ort::AllocatorWithDefaultOptions allocator_;
     std::string onnx_input_name_;
+    std::size_t onnx_input_size_ = 0;
     std::vector<std::string> output_names_str_;
     std::vector<const char*> output_names_;
     std::string action_output_name_ = "actions";
 
     std::thread policy_thread_;
     std::atomic<bool> policy_thread_running_{false};
+    std::thread prewarm_thread_;
+    std::atomic<bool> prewarm_started_{false};
+    std::atomic<bool> prewarm_done_{false};
+    std::atomic<bool> prewarmed_{false};
 
     mutable std::mutex target_mtx_;
     std::vector<float> latest_q_target_;

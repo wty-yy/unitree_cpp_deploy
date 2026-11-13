@@ -105,10 +105,10 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
     if (env->cfg["policy_type"].as<std::string>("feedforward") == "recurrent_height_map") {
         if (!env->height_map) throw std::runtime_error("Recurrent height-map policy requires height_map config");
         env->alg = std::make_unique<isaaclab::RecurrentHeightMapRunner>(
-            model_path.string(), [this] { return env->height_map_image; });
+            model_path.string(), [this] { return env->height_map_image; }, cfg);
         spdlog::info("State_{}: paired height-map DDS; unavailable maps stop velocity commands", state_string);
     } else {
-        env->alg = std::make_unique<isaaclab::OrtRunner>(model_path);
+        env->alg = std::make_unique<isaaclab::OrtRunner>(model_path, cfg);
     }
 
     const std::size_t dof = env->robot->data.joint_ids_map.size();
@@ -216,6 +216,65 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
             spdlog::info("Press [L2 + Y] to toggle fixed command execution");
         }
     }
+}
+
+void State_RLBase::warmup()
+{
+    if (!env || !env->alg)
+    {
+        return;
+    }
+    const auto cfg = param::config["FSM"][getStateString()];
+    if (!cfg["onnx_warmup"].as<bool>(true))
+    {
+        spdlog::info("State_{}: ONNX warmup disabled by config", getStateString());
+        return;
+    }
+    env->alg->warmup();
+}
+
+bool State_RLBase::start_policy_prewarm(int frames)
+{
+    if (!env || frames <= 0 || prewarm_started_.exchange(true))
+    {
+        return false;
+    }
+    prewarm_done_ = false;
+    prewarm_thread_ = std::thread([this, frames] {
+        using clock = std::chrono::steady_clock;
+        try
+        {
+            // Same reset as a normal entry, but no lowcmd writes: the previous
+            // state keeps driving the robot until these frames are produced.
+            env->reset();
+            const auto dt = std::chrono::duration_cast<clock::duration>(
+                std::chrono::duration<double>(env->step_dt));
+            auto next = clock::now() + dt;
+            for (int i = 0; i < frames; ++i)
+            {
+                env->step();
+                std::this_thread::sleep_until(next);
+                next += dt;
+            }
+            prewarmed_ = true;
+        }
+        catch (const std::exception& error)
+        {
+            // Keep the controller alive in the current state.
+            spdlog::error("State_{}: policy prewarm failed: {}", getStateString(), error.what());
+        }
+        prewarm_done_ = true;
+    });
+    return true;
+}
+
+void State_RLBase::finish_policy_prewarm()
+{
+    if (prewarm_thread_.joinable())
+    {
+        prewarm_thread_.join();
+    }
+    prewarm_started_ = false;
 }
 
 void State_RLBase::start_logging()

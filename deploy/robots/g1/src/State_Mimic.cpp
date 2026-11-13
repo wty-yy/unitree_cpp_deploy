@@ -201,7 +201,7 @@ State_Mimic::State_Mimic(int state_mode, std::string state_string)
         YAML::LoadFile((policy_dir / deploy_rel).string()),
         articulation
     );
-    env_->alg = std::make_unique<isaaclab::OrtRunner>((policy_dir / onnx_rel).string());
+    env_->alg = std::make_unique<isaaclab::OrtRunner>((policy_dir / onnx_rel).string(), cfg);
 
     const std::string finished_state = cfg["finished_transition"]
         ? cfg["finished_transition"].as<std::string>()
@@ -224,6 +224,21 @@ State_Mimic::State_Mimic(int state_mode, std::string state_string)
     //         FSMStringMap.right.at("Passive")
     //     )
     // );
+}
+
+void State_Mimic::warmup()
+{
+    if (!env_ || !env_->alg)
+    {
+        return;
+    }
+    const auto cfg = param::config["FSM"][getStateString()];
+    if (!cfg["onnx_warmup"].as<bool>(true))
+    {
+        spdlog::info("State_{}: ONNX warmup disabled by config", getStateString());
+        return;
+    }
+    env_->alg->warmup();
 }
 
 void State_Mimic::enter()

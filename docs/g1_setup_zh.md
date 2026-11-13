@@ -81,7 +81,8 @@ cmake -B build && cmake --build build -j$(nproc)
 - `policy_dir`: BFM 模型目录
 - `deploy_yaml`: 部署参数路径（相对 `policy_dir`）
 - `onnx_model`: ONNX 文件路径（相对 `policy_dir`）
-- `onnx_cuda`: 是否开启 CUDA（默认建议 `true`）
+- `onnx_tensorrt`: 是否开启 TensorRT（默认 `true`，失败自动回退 CUDA）
+- `onnx_cuda`: 是否开启 CUDA（默认跟随 `onnx_tensorrt`，一般不用写）
 - `onnx_cuda_device`: CUDA 设备号
 - `task_type`: `goal` / `reward` / `tracking`
 - `latent_file`: 对应任务潜变量 `.npz`
@@ -133,7 +134,7 @@ BFM 的 [deploy.yaml](../logs/g1/bfm/official/param/deploy.yaml) 使用双组观
 - `residual_model`: residual policy ONNX 路径，相对 `policy_dir`
 - `fk_model`: 腰部 FK ONNX 路径，相对 `policy_dir`
 - `motion_files`: 轨迹 `.npz` 列表，相对 `policy_dir`
-- `onnx_cuda` / `onnx_tensorrt` / `onnx_cuda_device`: ONNX Runtime 执行后端
+- `onnx_tensorrt` / `onnx_cuda` / `onnx_cuda_device`: ONNX Runtime 执行后端（`onnx_cuda` 默认跟随 `onnx_tensorrt`）
 - `residual_scale`: 残差增益，默认 `1.0`
 - `loop_trajectory`: 是否循环播放轨迹
 - `root_body_index`: `body_quat_w` 中 root body 索引，用于初始 yaw 对齐

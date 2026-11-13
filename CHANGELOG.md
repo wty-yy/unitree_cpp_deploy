@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 20261113 v0.7.3
+
+1. Add a TensorRT execution provider with a per-policy engine cache (`<policy_dir>/exported/trt_cache`) and CUDA fallback for RL, BFM, and mimic policies
+2. Precompile every enabled policy during `g1_ctrl` startup, before the operator can switch, and add `onnx_warmup` to opt a state out
+3. Defer switches into `Velocity_*` and `BFM_goal`: the target policy runs `FSM.switch_prewarm_frames` (default 5) control frames in the background while the previous state keeps publishing `LowCmd`, then hands over
+4. Refactor `State_BFM` policy execution into shared `init_policy_state()` and `policy_step()` used by both the control thread and the deferred-switch prewarm
+5. Log FSM switch duration plus RL state entry, reset, and first-step timings to diagnose switching latency
+6. Document policy precompilation, deferred switching, and the `onnx_cuda` default (it follows `onnx_tensorrt`)
+
 ## 20261112 v0.7.2
 
 1. Expose FSM bindings, resolved policy directories, disabled states, and motion-overlay keys through the read-only `policy_catalog` interface

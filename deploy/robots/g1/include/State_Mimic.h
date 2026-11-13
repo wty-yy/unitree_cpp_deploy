@@ -17,6 +17,7 @@ public:
 
     void enter();
     void run();
+    void warmup() override;
     void exit();
 
     class MotionLoader_;

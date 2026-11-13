@@ -4,7 +4,11 @@
 #pragma once
 
 #include "onnxruntime_cxx_api.h"
+#include <yaml-cpp/yaml.h>
+#include <algorithm>
 #include <chrono>
+#include <filesystem>
+#include <iostream>
 #include <limits>
 #include <mutex>
 #include <map>
@@ -19,6 +23,9 @@ class Algorithms
 public:
     virtual ~Algorithms() = default;
     virtual void reset() {}
+    // Pay the one-off execution-provider cost (TensorRT compiles dynamic-shape
+    // engines on the first Run) up front instead of on the first policy switch.
+    virtual void warmup(int /*iterations*/ = 2) {}
     virtual std::vector<float> act(std::unordered_map<std::string, std::vector<float>> obs) = 0;
     virtual std::map<std::string, std::vector<float>> forward(std::unordered_map<std::string, std::vector<float>> obs) { return {}; }
     
@@ -40,13 +47,15 @@ protected:
 class OrtRunner : public Algorithms
 {
 public:
-    OrtRunner(std::string model_path)
+    OrtRunner(std::string model_path, const YAML::Node& cfg = YAML::Node())
+        : model_path_(std::move(model_path))
     {
         // Init Model
         env = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "onnx_model");
         session_options.SetGraphOptimizationLevel(ORT_ENABLE_EXTENDED);
+        configure_providers(model_path_, cfg);
 
-        session = std::make_unique<Ort::Session>(env, model_path.c_str(), session_options);
+        session = std::make_unique<Ort::Session>(env, model_path_.c_str(), session_options);
 
         // Dynamic input detection
         size_t num_inputs = session->GetInputCount();
@@ -162,11 +171,87 @@ public:
         return results;
     }
 
+    // Run the model with zero inputs of the declared shapes. TensorRT only builds
+    // the dynamic-shape engine on the first Run, so doing this at startup (or from
+    // the precompile tool) removes the build latency from policy switching.
+    // Calls the base forward explicitly: derived runners need live sensors.
+    void warmup(int iterations = 2) override
+    {
+        std::unordered_map<std::string, std::vector<float>> obs;
+        obs.reserve(input_names_strings.size());
+        for (std::size_t i = 0; i < input_names_strings.size(); ++i)
+        {
+            obs.emplace(input_names_strings[i], std::vector<float>(input_sizes[i], 0.0f));
+        }
+
+        const auto start = std::chrono::steady_clock::now();
+        for (int i = 0; i < iterations; ++i) OrtRunner::forward(obs);
+        warmup_ms_ = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - start).count();
+
+        std::cout << "OrtRunner: warmup " << model_path_ << " iterations=" << iterations
+                  << " total_ms=" << warmup_ms_ << std::endl;
+    }
+
 private:
+    void configure_providers(const std::string& model_path, const YAML::Node& cfg)
+    {
+        const bool enable_tensorrt = cfg["onnx_tensorrt"].as<bool>(false);
+        const bool enable_cuda = cfg["onnx_cuda"].as<bool>(enable_tensorrt);
+        const int device_id = cfg["onnx_cuda_device"].as<int>(0);
+        const auto providers = Ort::GetAvailableProviders();
+        auto available = [&](const char* name) {
+            return std::find(providers.begin(), providers.end(), name) != providers.end();
+        };
+        auto append = [&](OrtStatus* status, const char* provider) {
+            if (!status) return true;
+            std::cerr << "OrtRunner: " << provider << " unavailable: "
+                      << Ort::GetApi().GetErrorMessage(status) << std::endl;
+            Ort::GetApi().ReleaseStatus(status);
+            return false;
+        };
+
+        bool tensorrt = false;
+        if (enable_tensorrt && available("TensorrtExecutionProvider"))
+        {
+            const auto cache = (std::filesystem::absolute(model_path).parent_path() / "trt_cache").string();
+            std::filesystem::create_directories(cache);
+            OrtTensorRTProviderOptions options{};
+            options.device_id = device_id;
+            options.trt_max_partition_iterations = 1000;
+            options.trt_min_subgraph_size = 1;
+            options.trt_max_workspace_size = 1ULL << 30;
+            options.trt_engine_cache_enable = 1;
+            options.trt_engine_cache_path = cache.c_str();
+            // Keep FP32 precision; acceleration must not implicitly enable FP16.
+            tensorrt = append(Ort::GetApi().SessionOptionsAppendExecutionProvider_TensorRT(
+                session_options, &options), "TensorRT");
+        }
+        if (enable_tensorrt && !tensorrt)
+            std::cerr << "OrtRunner: requested TensorRT could not be enabled for " << model_path << std::endl;
+
+        // Register CUDA after TensorRT for operators that TensorRT cannot execute.
+        bool cuda = false;
+        if (enable_cuda && available("CUDAExecutionProvider"))
+        {
+            OrtCUDAProviderOptions options{};
+            options.device_id = device_id;
+            cuda = append(Ort::GetApi().SessionOptionsAppendExecutionProvider_CUDA(
+                session_options, &options), "CUDA");
+        }
+        if (enable_cuda && !cuda)
+            std::cerr << "OrtRunner: requested CUDA could not be enabled for " << model_path << std::endl;
+        std::cout << "OrtRunner: " << model_path << " execution providers: "
+                  << (tensorrt ? "TensorRT > " : "") << (cuda ? "CUDA > " : "") << "CPU" << std::endl;
+    }
+
     Ort::Env env;
     Ort::SessionOptions session_options;
     std::unique_ptr<Ort::Session> session;
     Ort::AllocatorWithDefaultOptions allocator;
+
+    std::string model_path_;
+    double warmup_ms_ = std::numeric_limits<double>::quiet_NaN();
 
     std::vector<const char*> input_names;
     std::vector<std::string> input_names_strings;

@@ -85,6 +85,10 @@ public:
 
     void start() 
     {
+        // Compile every policy before the robot can be switched, so entering a
+        // state never pays TensorRT/CUDA warmup on the control path.
+        warmup_states();
+
         // Start From State_Passive
         currentState = states[0];
         currentState->enter();
@@ -92,6 +96,33 @@ public:
         fsm_thread_ = std::make_shared<unitree::common::RecurrentThread>(
             "FSM", 0, this->dt * 1e6, &CtrlFSM::run_, this);
         spdlog::info("FSM: Start {}", currentState->getStateString());
+    }
+
+    void warmup_states()
+    {
+        const auto total_start = std::chrono::steady_clock::now();
+        for (auto& state : states)
+        {
+            const auto state_start = std::chrono::steady_clock::now();
+            spdlog::info("FSM: precompiling State_{} ...", state->getStateString());
+            try
+            {
+                state->warmup();
+            }
+            catch (const std::exception& error)
+            {
+                // Keep the robot bootable; only this policy's first switch is slow.
+                spdlog::error("FSM: State_{} precompile failed: {}; its first switch may stall",
+                              state->getStateString(), error.what());
+                continue;
+            }
+            spdlog::info("FSM: State_{} precompiled in {:.1f} ms", state->getStateString(),
+                         std::chrono::duration<double, std::milli>(
+                             std::chrono::steady_clock::now() - state_start).count());
+        }
+        spdlog::info("FSM: all policies precompiled in {:.1f} ms",
+                     std::chrono::duration<double, std::milli>(
+                         std::chrono::steady_clock::now() - total_start).count());
     }
 
     void add(std::shared_ptr<BaseState> state)
@@ -122,6 +153,8 @@ public:
     std::vector<std::shared_ptr<BaseState>> states;
 private:
     const double dt = 0.001;
+    BaseState* pending_state_{nullptr};
+    std::chrono::steady_clock::time_point pending_since_{};
     YAML::Node overlay_cfg_;
 
     void run_()
@@ -139,7 +172,30 @@ private:
         std::string requested_state;
         const bool external_request =
             robot_automation::ExternalVelocity::instance().take_requested_state(requested_state);
-        if (external_request)
+        if (pending_state_)
+        {
+            // The previous state keeps publishing lowcmd until the target policy
+            // has produced its warm-up frames.
+            const auto waited = std::chrono::steady_clock::now() - pending_since_;
+            if (!pending_state_->policy_prewarm_done() && waited < std::chrono::seconds(2))
+            {
+                if (external_request)
+                {
+                    robot_automation::ExternalVelocity::instance().report_state_result(
+                        false, "Switch in progress: prewarming " + pending_state_->getStateString());
+                }
+                currentState->post_run();
+                return;
+            }
+            if (!pending_state_->policy_prewarm_done())
+            {
+                spdlog::warn("FSM: policy prewarm timeout, switching to State_{} anyway",
+                             pending_state_->getStateString());
+            }
+            nextStateMode = pending_state_->getState();
+            pending_state_ = nullptr;
+        }
+        else if (external_request)
         {
             const auto requested_id = FSMStringMap.right.find(requested_state);
             if (requested_id == FSMStringMap.right.end())
@@ -183,7 +239,22 @@ private:
             {
                 if(state->isState(nextStateMode))
                 {
-                    spdlog::info("FSM: Change state from {} to {}", currentState->getStateString(), state->getStateString());
+                    const std::string from_state = currentState->getStateString();
+                    const std::string to_state = state->getStateString();
+                    const int prewarm_frames =
+                        param::config["FSM"]["switch_prewarm_frames"].as<int>(5);
+                    if (prewarm_frames > 0 && state->start_policy_prewarm(prewarm_frames))
+                    {
+                        pending_state_ = state.get();
+                        pending_since_ = std::chrono::steady_clock::now();
+                        spdlog::info(
+                            "FSM: prewarming State_{} for {} frames; State_{} keeps control",
+                            to_state, prewarm_frames, from_state);
+                        currentState->post_run();
+                        return;
+                    }
+                    spdlog::info("FSM: Change state from {} to {}", from_state, to_state);
+                    const auto switch_start = std::chrono::steady_clock::now();
                     if (active_overlay_)
                     {
                         active_overlay_->deactivate();
@@ -192,10 +263,14 @@ private:
                     robot_automation::ExternalVelocity::instance().update("Transition", false, false);
                     currentState->exit();
                     currentState = state;
+                    currentState->finish_policy_prewarm();
                     currentState->enter();
                     update_external_velocity_();
                     robot_automation::ExternalVelocity::instance().report_state_result(
-                        true, "Transitioned to " + state->getStateString());
+                        true, "Transitioned to " + to_state);
+                    spdlog::info("FSM: switch {} -> {} took {:.1f} ms", from_state, to_state,
+                                 std::chrono::duration<double, std::milli>(
+                                     std::chrono::steady_clock::now() - switch_start).count());
                     break;
                 }
             }

@@ -31,6 +31,17 @@ public:
 
     virtual void exit() {}
 
+    // Pay one-off policy compilation cost (TensorRT engine build, kernel warmup)
+    // before the operator can switch into this state.
+    virtual void warmup() {}
+
+    // Optional deferred switch: run the target policy for `frames` control frames
+    // without writing lowcmd, so the previous state keeps driving the robot.
+    // Returns false when this state has no policy to prewarm.
+    virtual bool start_policy_prewarm(int /*frames*/) { return false; }
+    virtual bool policy_prewarm_done() const { return true; }
+    virtual void finish_policy_prewarm() {}
+
     std::string getStateString() { return FSMStringMap.left.at(state_); }
     int getState() {return state_; }
     bool isState(int state) { return state_ == state; }

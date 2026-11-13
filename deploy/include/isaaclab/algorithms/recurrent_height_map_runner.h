@@ -10,8 +10,9 @@ class RecurrentHeightMapRunner : public OrtRunner
 {
 public:
     RecurrentHeightMapRunner(const std::string& path,
-                            std::function<std::vector<float>()> height_map)
-        : OrtRunner(path), height_map_(std::move(height_map))
+                            std::function<std::vector<float>()> height_map,
+                            const YAML::Node& cfg = YAML::Node())
+        : OrtRunner(path, cfg), height_map_(std::move(height_map))
     {
         reset();
     }

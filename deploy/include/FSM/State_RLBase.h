@@ -25,6 +25,7 @@ public:
             return;
         }
 
+        const auto enter_start = std::chrono::steady_clock::now();
         start_logging();
 
         // set gain
@@ -49,33 +50,63 @@ public:
         }
         // Start policy thread
         policy_thread_running = true;
-        policy_thread = std::thread([this]{
+        policy_thread = std::thread([this, enter_start]{
             using clock = std::chrono::high_resolution_clock;
             const std::chrono::duration<double> desiredDuration(env->step_dt);
             const auto dt = std::chrono::duration_cast<clock::duration>(desiredDuration);
 
             // Initialize timing
             auto sleepTill = clock::now() + dt;
-            env->reset();
+            const auto reset_start = std::chrono::steady_clock::now();
+            // A deferred switch already ran this policy's frames; keep its history.
+            if (!prewarmed_.exchange(false))
+            {
+                env->reset();
+            }
+            const auto reset_done = std::chrono::steady_clock::now();
 
+            bool first_step = true;
             while (policy_thread_running)
             {
                 env->step();
+                if (first_step)
+                {
+                    first_step = false;
+                    const auto step_done = std::chrono::steady_clock::now();
+                    spdlog::info(
+                        "State_{}: policy ready in {:.1f} ms (enter {:.1f} ms, reset {:.1f} ms, first step {:.1f} ms)",
+                        getStateString(),
+                        std::chrono::duration<double, std::milli>(step_done - enter_start).count(),
+                        std::chrono::duration<double, std::milli>(reset_start - enter_start).count(),
+                        std::chrono::duration<double, std::milli>(reset_done - reset_start).count(),
+                        std::chrono::duration<double, std::milli>(step_done - reset_done).count());
+                }
 
                 // Sleep
                 std::this_thread::sleep_until(sleepTill);
                 sleepTill += dt;
             }
         });
+
+        spdlog::info("State_{}: enter took {:.1f} ms", getStateString(),
+                     std::chrono::duration<double, std::milli>(
+                         std::chrono::steady_clock::now() - enter_start).count());
     }
 
     void run();
-    
+    void warmup() override;
+    bool start_policy_prewarm(int frames) override;
+    bool policy_prewarm_done() const override { return prewarm_done_.load(); }
+    void finish_policy_prewarm() override;
+
     void exit()
     {
         policy_thread_running = false;
         if (policy_thread.joinable()) {
             policy_thread.join();
+        }
+        if (prewarm_thread_.joinable()) {
+            prewarm_thread_.join();
         }
     }
 
@@ -103,6 +134,10 @@ private:
 
     std::thread policy_thread;
     std::atomic<bool> policy_thread_running{false};
+    std::thread prewarm_thread_;
+    std::atomic<bool> prewarm_started_{false};
+    std::atomic<bool> prewarm_done_{false};
+    std::atomic<bool> prewarmed_{false};
     std::uint64_t entry_inference_seq_ = 0;
     joint_filter::JointVectorFilterBank action_filter_;
     std::vector<float> filtered_action_;

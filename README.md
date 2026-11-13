@@ -139,6 +139,21 @@ Paths resolve relative to `deploy/robots/g1/`. Replace the model and deployment 
 - `exported/policy.onnx`
 - `params/deploy.yaml`
 
+### Policy precompilation
+
+TensorRT builds the dynamic-shape engine on the first inference, which would otherwise stall the
+first switch into a policy. `g1_ctrl` precompiles every enabled policy during startup, before the
+`Press [L2 + Up]` prompt, so switching states never waits for compilation. Set `onnx_warmup: false`
+on a state to skip its warmup.
+
+Switches into `Velocity_*` or `BFM_goal` are deferred by default: the target policy runs
+`FSM.switch_prewarm_frames` (5) control frames in the background while the previous state keeps
+driving the robot, and control is handed over afterwards. Set it to `0` to switch immediately.
+
+The engine cache lives in `<policy_dir>/exported/trt_cache`, so the first boot after adding a model
+builds the engines (slower) and later boots just load them. The cache is tied to the GPU and
+TensorRT version, so it must be produced on the target machine.
+
 ### BFM-Zero configuration
 
 Under `FSM.BFM_goal / FSM.BFM_reward / FSM.BFM_tracking`, you can configure:
@@ -146,7 +161,8 @@ Under `FSM.BFM_goal / FSM.BFM_reward / FSM.BFM_tracking`, you can configure:
 - `policy_dir`: BFM model directory
 - `deploy_yaml`: deployment parameter path, default `param/deploy.yaml`
 - `onnx_model`: ONNX model path, default `exported/FBcprAuxModel.onnx`
-- `onnx_cuda` / `onnx_tensorrt` / `onnx_cuda_device`: ONNX Runtime backend settings
+- `onnx_tensorrt` / `onnx_cuda` / `onnx_cuda_device`: ONNX Runtime backend settings; `onnx_cuda` defaults to `onnx_tensorrt`, so it is only needed to run CUDA with TensorRT disabled
+- `onnx_warmup`: precompile this policy during startup, default `true`
 - `task_type`: `goal`, `reward`, or `tracking`
 - `latent_file`: latent `.npz` file for the corresponding task
 - `gamepad_map`: overrides for `start_motion`, `next_latent`, and `reset_state`
@@ -177,7 +193,7 @@ Under `FSM.OmniXtreme`, you can configure:
 - `residual_model`
 - `fk_model`
 - `motion_files`
-- `onnx_cuda` / `onnx_tensorrt` / `onnx_cuda_device`
+- `onnx_tensorrt` / `onnx_cuda` / `onnx_cuda_device` (`onnx_cuda` defaults to `onnx_tensorrt`)
 - `residual_scale`
 - `loop_trajectory`
 - `root_body_index`
