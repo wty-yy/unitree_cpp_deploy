@@ -42,6 +42,16 @@ cmake -B build -DONNXRUNTIME_ROOT=
 
 Orin NX 环境使用 JetPack 6.2 和 CUDA 12.6.68，刷机参考 [G1 刷机记录](https://wty-yy.github.io/posts/30579/#g1%E5%88%B7%E6%9C%BA%E8%AE%B0%E5%BD%95)。需安装所选 GPU 包及执行后端要求的 CUDA/cuDNN/TensorRT 依赖。
 
+### TensorRT 运行时（可选）
+
+GPU 版 ONNX Runtime 包已经自带 `libonnxruntime_providers_tensorrt.so`，不需要另外编译一版 ORT；
+只要系统里有 TensorRT 10.x 运行时即可，因为该插件是按 `libnvinfer.so.10` 这个 SONAME 加载的。
+
+从 [NVIDIA CUDA 仓库（Ubuntu 24.04）](https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/)
+下载 `libnvinfer10`、`libnvinfer-plugin10`、`libnvonnxparsers10`（选与 CUDA 版本匹配的构建），
+用 `sudo dpkg -i` 安装后执行 `sudo ldconfig`。缺 TensorRT 时日志会打印 `TensorRT unavailable` 并回退 CUDA；
+Orin 上 JetPack 自带，无需安装。
+
 ### 策略与动作文件
 
 仓库包含当前 [config.yaml](deploy/robots/g1/config/config.yaml) 引用的运控与 BeyondMimic 模型、部署 YAML 和动作 CSV；BFM-Zero 与 OmniXtreme 由用户单独下载。ONNX 和 NPZ 分别通过 `.gitattributes` 中的 `*.onnx`、`*.npz` 规则由 Git LFS 管理，克隆后运行 `git lfs pull` 获取完整文件。
@@ -69,6 +79,8 @@ BFM-Zero 和 OmniXtreme 的 `official/` 目录按上述说明单独下载，模�
 ```
 
 ### MuJoCo 仿真
+
+仿真仓库请使用 [wty-yy/unitree_mujoco（g1 分支）](https://github.com/wty-yy/unitree_mujoco/tree/g1) 安装。
 
 先启动使用兼容 Unitree DDS 话题的 G1 29 自由度仿真器，再在另一终端通过环回网卡启动控制程序。
 

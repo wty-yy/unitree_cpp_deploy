@@ -42,6 +42,17 @@ cmake -B build -DONNXRUNTIME_ROOT=
 
 The Orin NX setup uses JetPack 6.2 and CUDA 12.6.68; see [G1 flashing notes](https://wty-yy.github.io/posts/30579/#g1%E5%88%B7%E6%9C%BA%E8%AE%B0%E5%BD%95). Install the CUDA/cuDNN/TensorRT dependencies required by the selected GPU package and execution provider.
 
+### TensorRT runtime (optional)
+
+The GPU ONNX Runtime package already ships `libonnxruntime_providers_tensorrt.so`, so no separate
+ONNX Runtime build is needed; only NVIDIA's TensorRT 10.x runtime has to be present, because the
+provider plugin loads it by the `libnvinfer.so.10` SONAME.
+
+Get `libnvinfer10`, `libnvinfer-plugin10`, and `libnvonnxparsers10` (pick the build matching your
+CUDA version) from the [NVIDIA CUDA repository for Ubuntu 24.04](https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/),
+then install them with `sudo dpkg -i` and run `sudo ldconfig`. Without TensorRT the provider logs
+`TensorRT unavailable` and falls back to CUDA; on Orin, JetPack already provides it.
+
 ### Policy and motion files
 
 The repository includes the locomotion and BeyondMimic models, deployment YAML, and motion CSV referenced by the current [config.yaml](deploy/robots/g1/config/config.yaml). Download BFM-Zero and OmniXtreme separately. ONNX and NPZ files use Git LFS through the `*.onnx` and `*.npz` rules in `.gitattributes`. Run `git lfs pull` after cloning to download the full files.
@@ -69,6 +80,8 @@ Run from `deploy/robots/g1/` and select the interface connected to the robot. Wh
 ```
 
 ### MuJoCo simulator
+
+Use [wty-yy/unitree_mujoco (g1 branch)](https://github.com/wty-yy/unitree_mujoco/tree/g1) to install the simulator.
 
 Start a G1 29-DOF simulator with compatible Unitree DDS topics, then launch the controller in a separate terminal using the loopback interface.
 
